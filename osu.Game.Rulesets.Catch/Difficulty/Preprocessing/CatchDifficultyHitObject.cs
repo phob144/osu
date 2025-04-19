@@ -11,87 +11,57 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
     public class CatchDifficultyHitObject : DifficultyHitObject
     {
-        public const float NORMALIZED_HALF_CATCHER_WIDTH = 41.0f;
-        private const float absolute_player_positioning_error = 16.0f;
-
         public new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
 
         public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
 
-        /// <summary>
-        /// Normalized position of <see cref="BaseObject"/>.
-        /// </summary>
-        public readonly float NormalizedPosition;
+        public readonly double DistanceMoved
 
         /// <summary>
-        /// Normalized position of <see cref="LastObject"/>.
-        /// </summary>
-        public readonly float LastNormalizedPosition;
-
-        /// <summary>
-        /// Normalized position of the player required to catch <see cref="BaseObject"/>, assuming the player moves as little as possible.
-        /// </summary>
-        public float PlayerPosition { get; private set; }
-
-        /// <summary>
-        /// Normalized position of the player after catching <see cref="LastObject"/>.
-        /// </summary>
-        public float LastPlayerPosition { get; private set; }
-
-        /// <summary>
-        /// Normalized distance between <see cref="LastPlayerPosition"/> and <see cref="PlayerPosition"/>.
-        /// </summary>
-        /// <remarks>
-        /// The sign of the value indicates the direction of the movement: negative is left and positive is right.
-        /// </remarks>
-        public float DistanceMoved { get; private set; }
-
-        /// <summary>
-        /// Normalized distance the player has to move from <see cref="LastPlayerPosition"/> in order to catch <see cref="BaseObject"/> at its <see cref="NormalizedPosition"/>.
-        /// </summary>
-        /// <remarks>
-        /// The sign of the value indicates the direction of the movement: negative is left and positive is right.
-        /// </remarks>
-        public float ExactDistanceMoved { get; private set; }
-
-        /// <summary>
-        /// Milliseconds elapsed since the start time of the previous <see cref="CatchDifficultyHitObject"/>, with a minimum of 40ms.
+        /// Milliseconds elapsed since the start time of the previous <see cref="CatchDifficultyHitObject"/>, with a minimum of 25ms.
         /// </summary>
         public readonly double StrainTime;
+
+        /// <summary>
+        /// Jump type judged by direction and distance in 11 different types
+        /// 0 - standstill, 1 - walk, 2 - middash, 3 - normal dash, 4 - edge dash and 5 - hyperdash. negative - movement to the left, positive - movement to the right
+        /// </summary>
+        public readonly int JumpType;
+
+        public readonly double CatcherSpeed;
 
         public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
         {
             // We will scale everything by this factor, so we can assume a uniform CircleSize among beatmaps.
-            float scalingFactor = NORMALIZED_HALF_CATCHER_WIDTH / halfCatcherWidth;
+            // but disabled the code because it applies in only std case because catcher speed is fixed regardless resolution/cs
+            // float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
+            // NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
+            // LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
-            NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
-            LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
-            // Every strain interval is hard capped at the equivalent of 375 BPM streaming speed as a safety measure
-            StrainTime = Math.Max(40, DeltaTime);
+            DistanceValue = BaseObject.EffectiveX - (LastObject.EffectiveX + (getExpectableInertia()*halfCatcherWidth/2));
 
-            setMovementState();
+            // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
+            StrainTime = Math.Max(25, DeltaTime);
+
+            JumpType = getJumpType();
+
+            CatcherSpeed = clockRate; // *hdash speed value
         }
 
-        private void setMovementState()
+        private double getExpectableInertia()
         {
-            LastPlayerPosition = Index == 0 ? LastNormalizedPosition : ((CatchDifficultyHitObject)Previous(0)).PlayerPosition;
+            //TODO : if previous(0) was the destination of hdash,
+            //TODO : return Math.Clamp(Math.Sqrt(hdash speed value),1,2)-1 else return 0
+            //Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
+            return 0;
 
-            PlayerPosition = Math.Clamp(
-                LastPlayerPosition,
-                NormalizedPosition - (NORMALIZED_HALF_CATCHER_WIDTH - absolute_player_positioning_error),
-                NormalizedPosition + (NORMALIZED_HALF_CATCHER_WIDTH - absolute_player_positioning_error)
-            );
+        }
 
-            DistanceMoved = PlayerPosition - LastPlayerPosition;
-
-            // For the exact position we consider that the catcher is in the correct position for both objects
-            ExactDistanceMoved = NormalizedPosition - LastPlayerPosition;
-
-            // After a hyperdash we ARE in the correct position. Always!
-            if (LastObject.HyperDash)
-                PlayerPosition = NormalizedPosition;
+        private int getJumpType()
+        {
+            //TODO : follow page2 of Sketch 2 docs
         }
     }
 }
