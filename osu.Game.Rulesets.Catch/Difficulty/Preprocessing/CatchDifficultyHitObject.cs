@@ -40,6 +40,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
         public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
 
+        public readonly float NormalizedPosition;
+        public readonly float LastNormalizedPosition;
+
+        private const float normalized_hitobject_radius = 41.0f;
+
         /// <summary>
         /// Exact Distance Value between 2 notes
         /// </summary>
@@ -78,10 +83,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             : base(hitObject, lastObject, clockRate, objects, index)
         {
             // We will scale everything by this factor, so we can assume a uniform CircleSize among beatmaps.
-            // but disabled the code because it applies in only std case because catcher speed is fixed regardless resolution/cs
-            // float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
-            // NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
-            // LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
+            float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
+
+            NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
+            LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
