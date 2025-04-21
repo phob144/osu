@@ -1,3 +1,9 @@
+using System.Net.Http.Headers;
+using System.ComponentModel;
+using System.Reflection;
+using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Text.RegularExpressions;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -11,11 +17,19 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
     public class CatchDifficultyHitObject : DifficultyHitObject
     {
-        public new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
+        protected new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
 
-        public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
+        protected new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
 
-        public readonly double DistanceMoved
+        /// <summary>
+        /// Exact Distance Value between 2 notes
+        /// </summary>
+        public readonly double DistanceMoved;
+        
+        /// <summary>
+        /// Adjusted Distance Value with Hyperdash Inertia 
+        /// </summary>
+        public readonly double PlayerMoved;
 
         /// <summary>
         /// Milliseconds elapsed since the start time of the previous <see cref="CatchDifficultyHitObject"/>, with a minimum of 25ms.
@@ -28,7 +42,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         /// </summary>
         public readonly int JumpType;
 
+        /// <summary>
+        /// Catcher speed modified by mods and hyperdash
+        /// </summary>
         public readonly double CatcherSpeed;
+
+        public readonly bool IsHyper;
 
         public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
@@ -38,30 +57,48 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             // float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
             // NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
             // LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
+         
+            DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
-
-            DistanceValue = BaseObject.EffectiveX - (LastObject.EffectiveX + (getExpectableInertia()*halfCatcherWidth/2));
+            //Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
+            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate)*halfCatcherWidth/2
 
             // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
             StrainTime = Math.Max(25, DeltaTime);
 
-            JumpType = getJumpType();
+            JumpType = getJumpType(halfCatcherWidth);
 
-            CatcherSpeed = clockRate; // *hdash speed value
+            CatcherSpeed = clockRate * getHyperDashSpeed(BaseObject);
+            
+            IsHyper = LastObject.hyperDash;
+
+        private double getExpectableInertia(double clockRate)
+        {
+            return Match.Clamp(Math.Sqrt(getHyperDashSpeed(base.Previous(0)) / clockRate),1,2)-1;
         }
 
-        private double getExpectableInertia()
-        {
-            //TODO : if previous(0) was the destination of hdash,
-            //TODO : return Math.Clamp(Math.Sqrt(hdash speed value),1,2)-1 else return 0
-            //Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
-            return 0;
-
+        private double getHyperDashSpeed(PalpableCatchHitObject current){
+            return Math.Max(1,(current.EffectiveX-current.Previous(0).EffectiveX) / Math.Max(1.0, DeltaTime - 1000.0 / 60.0));
         }
 
-        private int getJumpType()
+        private int getJumpType(float halfCatcherSize)
         {
-            //TODO : follow page2 of Sketch 2 docs
+            int jumpType = 0;
+            if (PlayerMoved > halfCatcherSize*1.2)
+            {
+                jumpType += 1;
+                if (LastObject.hyperDash){
+                    jumpType += 4;
+                }else if (PlayerMoved/StrainTime >= 0.5){
+                    jumpType += 1;
+                    if ((PlayerMoved-halfCatcherSize)/StrainTime > 0.9)
+                    {
+                        jumpType += 2;
+                    }else jumpType += 1;
+                }
+                jumpType *= Math.Sign(jumpType);
+            }
+            return jumpType;
         }
     }
 }
