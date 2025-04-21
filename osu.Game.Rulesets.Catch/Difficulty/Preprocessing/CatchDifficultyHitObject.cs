@@ -15,11 +15,25 @@ using osu.Game.Rulesets.Objects;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
+    public enum JumpType
+    {
+        HyperDashToLeft = -5,
+        EdgeDashToLeft = -4,
+        DashToLeft = -3,
+        MidDashToLeft = -2,
+        WalkToLeft = -1,
+        Standstill = 0,
+        WalkToRight = 1,
+        MidDashToRight = 2,
+        DashToRight = 3,
+        EdgeDashToRight = 4,
+        HyperDashToRight = 5
+    }
     public class CatchDifficultyHitObject : DifficultyHitObject
     {
-        protected new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
+        public new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
 
-        protected new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
+        public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
 
         /// <summary>
         /// Exact Distance Value between 2 notes
@@ -40,8 +54,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         /// Jump type judged by direction and distance in 11 different types
         /// 0 - standstill, 1 - walk, 2 - middash, 3 - normal dash, 4 - edge dash and 5 - hyperdash. negative - movement to the left, positive - movement to the right
         /// </summary>
-        public readonly int JumpType;
-
+        public readonly JumpType jumpType;
         /// <summary>
         /// Catcher speed modified by mods and hyperdash
         /// </summary>
@@ -61,42 +74,43 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
             //Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
-            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate)*halfCatcherWidth/2
+            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate)*halfCatcherWidth/2;
 
             // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
             StrainTime = Math.Max(25, DeltaTime);
 
-            JumpType = getJumpType(halfCatcherWidth);
+            jumpType = getJumpType(halfCatcherWidth);
 
             CatcherSpeed = clockRate * getHyperDashSpeed(BaseObject);
             
             IsHyper = LastObject.hyperDash;
+        }
 
-        private double getExpectableInertia(double clockRate)
+        double getExpectableInertia(double clockRate)
         {
             return Match.Clamp(Math.Sqrt(getHyperDashSpeed(base.Previous(0)) / clockRate),1,2)-1;
         }
 
-        private double getHyperDashSpeed(PalpableCatchHitObject current){
+        double getHyperDashSpeed(PalpableCatchHitObject current){
             return Math.Max(1,(current.EffectiveX-current.Previous(0).EffectiveX) / Math.Max(1.0, DeltaTime - 1000.0 / 60.0));
         }
 
-        private int getJumpType(float halfCatcherSize)
+        int getJumpType(float halfCatcherSize)
         {
             int jumpType = 0;
             if (PlayerMoved > halfCatcherSize*1.2)
             {
-                jumpType += 1;
+                jumpType = 1;
                 if (LastObject.hyperDash){
-                    jumpType += 4;
+                    jumpType = 5;
                 }else if (PlayerMoved/StrainTime >= 0.5){
-                    jumpType += 1;
+                    jumpType = 2;
                     if ((PlayerMoved-halfCatcherSize)/StrainTime > 0.9)
                     {
-                        jumpType += 2;
-                    }else jumpType += 1;
+                        jumpType = 4;
+                    }else jumpType = 3;
                 }
-                jumpType *= Math.Sign(jumpType);
+                jumpType *= Math.Sign(PlayerMoved);
             }
             return jumpType;
         }

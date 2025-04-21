@@ -6,49 +6,83 @@ using osu.Game.Rulesets.Objects;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
+    public enum FlowType
+    {
+        DashToLeft = -2, // {-5, -4, -3}
+        WalkToLeft = -1, // {-2, -1}
+        StandStill = 0,        // {0}
+        WalkToRight = 1,  // {1, 2}
+        DashToRight = 2   // {3, 4, 5}
+    }
+
+    public enum TapDashType
+    {
+        None = 0,
+        Soft = 1,
+        Normal = 2,
+        Heavy = 3
+    }
+
     public class Flow
     {
+        // list of hitobjects involved in this flow segment
         public readonly CatchDifficultyHitObject[] DistancesInFlow;
+
+        // movement distances for each part of the flow
         public readonly double[] DistanceMovedOfFlow;
         public readonly double TotalDistance;
+
+        // strain times for each part of the flow
         public readonly double[] StrainTimeOfFlow;
         public readonly double TotalStrainTime;
-        public readonly int[] FlowType; // checking only key input changes
-        public readonly bool IsWiggle; // checking if it has wiggle flow with dash
-        public readonly int TapDashType; // checking tapdash type 1:soft(flow walk at the middle) / 2:normal(standstill at the middle) / 3:heavy(antiflow walk at the middle)
-        public readonly bool IsBuzz; // checking if it is the theoretically catchable without movement
+
+        // checking only key input changes of flows
+        public readonly FlowType[] FlowType;
+
+        // true if the movement pattern represents a wiggle
+        public readonly bool IsWiggle;
+
+        // type of tap-dash:
+        // 0 = not applicable
+        // 1 = soft (flow walk in middle)
+        // 2 = normal (standstill in middle)
+        // 3 = heavy (antiflow walk in middle)
+        public readonly TapDashType TapDashType;
+
+        // true if the entire flow could be caught without moving the catcher
+        public readonly bool IsBuzz;
+
+        // false if this hitobject is not the beginning of a new flow
         public readonly bool IsValid;
 
         public Flow(CatchDifficultyHitObject start, double halfCatcherWidth)
         {
-            // the class contains value of the next 3 linear flow of the hitobject.
-            // if the hitobject is not a start of new flow, isValid gets false so same flow won't be stacked in several hitobject.
-
             DistancesInFlow = Array.Empty<CatchDifficultyHitObject>();
             DistanceMovedOfFlow = new double[3];
             TotalDistance = 0;
             StrainTimeOfFlow = new double[3];
             TotalStrainTime = 0;
-            FlowType = new int[3];
+            FlowType = new FlowType[3];
             IsWiggle = false;
             TapDashType = 0;
             IsBuzz = false;
             IsValid = false;
 
             var previous = start.Previous(0);
-            if (previous == null || GetJumpTypeGroup(start.JumpType) == GetJumpTypeGroup(previous.JumpType))
+            if (previous == null || GetFlowType(start.JumpType) == GetFlowType(previous.JumpType))
                 return;
 
             IsValid = true;
 
-            List<CatchDifficultyHitObject> distancesInFlowList = new List<CatchDifficultyHitObject>();
+            List<CatchDifficultyHitObject> distancesInFlowList = new();
             double[] distanceMovedOfFlow = new double[3];
             double[] strainTimeOfFlow = new double[3];
-            int[] flowType = new int[3];
+            FlowType[] flowType = new FlowType[3];
 
             int jumpTypeChangeCount = 0;
             int i = 0;
 
+            // walk through next hitobjects to build a flow of up to 3 segments
             while (jumpTypeChangeCount < 3)
             {
                 var current = start.Next(i);
@@ -57,7 +91,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
                 distancesInFlowList.Add(current);
 
-                int currentGroup = GetJumpTypeGroup(current.JumpType);
+                var currentGroup = GetFlowType(current.JumpType);
 
                 if (i > 0)
                 {
@@ -65,7 +99,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
                     if (prev == null)
                         break;
 
-                    int prevGroup = GetJumpTypeGroup(prev.JumpType);
+                    var prevGroup = GetFlowType(prev.JumpType);
 
                     if (prevGroup != currentGroup)
                     {
@@ -89,26 +123,30 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             TotalStrainTime = strainTimeOfFlow.Sum();
             FlowType = flowType;
 
+            // Wiggle: flow[0]*flow[1] == -4 && flow[1]*flow[2] == -4
             if (flowType.Length >= 3)
-                IsWiggle = flowType[0] * flowType[1] == -4 && flowType[1] * flowType[2] == -4;
+                IsWiggle = (int)flowType[0] * (int)flowType[1] == -4 && (int)flowType[1] * (int)flowType[2] == -4;
 
+            // Buzz: max movement + total movement <= 2 * halfCatcherWidth
             double maxMove = distanceMovedOfFlow.Max();
             if (maxMove + TotalDistance <= halfCatcherWidth * 2)
                 IsBuzz = true;
 
-            if (flowType[0] * flowType[2] == 4)
+            // TapDashType: flow[0]*flow[2] == 4
+            if (FlowType[0] * FlowType[2] == 4)
             {
-                TapDashType = Math.Abs(flowType[1] - flowType[0]) <= 3 ? 1 : 2;
+                TapDashType = (TapDashType)Math.Abs(FlowType[1] - FlowType[0]);
             }
         }
 
-        private int GetJumpTypeGroup(int jumpType)
+        // maps jumpType value to flow group
+        private FlowType GetFlowType(int jumpType)
         {
-            if (jumpType <= -3) return -2;      // {-5, -4, -3}
-            if (jumpType <= -1) return -1;      // {-2, -1}
-            if (jumpType == 0) return 0;        // {0}
-            if (jumpType <= 2) return 1;        // {1, 2}
-            return 2;                           // {3, 4, 5}
+            if (jumpType <= -3) return FlowType.DashToLeft;
+            if (jumpType <= -1) return FlowType.WalkToLeft;
+            if (jumpType == 0) return FlowType.StandStill;
+            if (jumpType <= 2) return FlowType.WalkToRight;
+            return FlowType.DashToRight;
         }
     }
 }
