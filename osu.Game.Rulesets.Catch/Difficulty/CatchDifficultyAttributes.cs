@@ -9,12 +9,27 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 {
     public class CatchDifficultyAttributes : DifficultyAttributes
     {
+        /// <summary>
+        /// The difficulty value corresponding to precision.
+        /// </summary>
+        public double PrecisionDifficulty { get; set; }
+
+        /// <summary>
+        /// The difficulty value corresponding to reading.
+        /// </summary>
+        public double ReadingDifficulty { get; set; }
+
+        /// <summary>
+        /// The difficulty value corresponding to speed.
+        /// </summary>
+        public double SpeedDifficulty { get; set; }
+
         public override IEnumerable<(int attributeId, object value)> ToDatabaseAttributes()
         {
             foreach (var v in base.ToDatabaseAttributes())
                 yield return v;
 
-            // Todo: osu!catch should not output star rating in the 'aim' attribute.
+            // Temporary fallback until a proper schema is assigned
             yield return (ATTRIB_ID_AIM, StarRating);
         }
 

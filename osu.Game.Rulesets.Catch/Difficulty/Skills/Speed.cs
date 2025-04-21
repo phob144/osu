@@ -10,6 +10,24 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 {
     public class Speed : StrainDecaySkill
     {
+        protected override double SkillMultiplier => 2;
+        protected override double StrainDecayBase => 0.8;
+        protected override double DecayWeight => 0.95;
+        protected override int SectionLength => 2000;
 
+        protected readonly float HalfCatcherWidth;
+        private readonly double clockRate;
+
+        public Speed(Mod[] mods, float halfCatcherWidth, double clockRate)
+            : base(mods)
+        {
+            HalfCatcherWidth = halfCatcherWidth;
+            this.clockRate = clockRate;
+        }
+
+        protected override double StrainValueOf(DifficultyHitObject current)
+        {
+            return SpeedEvaluator.EvaluateDifficultyOf(current);
+        }
     }
 }

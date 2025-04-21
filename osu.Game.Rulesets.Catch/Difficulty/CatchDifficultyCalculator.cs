@@ -36,11 +36,25 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             if (beatmap.HitObjects.Count == 0)
                 return new CatchDifficultyAttributes { Mods = mods };
 
+            var speed = skills.OfType<Speed>().Single();
+            var precision = skills.OfType<Precision>().Single();
+            var reading = skills.OfType<Reading>().Single();
+
+            double speedValue = speed.DifficultyValue();
+            double precisionValue = precision.DifficultyValue();
+            double readingValue = reading.DifficultyValue();
+
+            double total = speedValue + precisionValue + readingValue;
+
             CatchDifficultyAttributes attributes = new CatchDifficultyAttributes
             {
-                StarRating = Math.Sqrt(skills.OfType<Movement>().Single().DifficultyValue()) * difficulty_multiplier,
+                StarRating = Math.Sqrt(total) * difficulty_multiplier,
                 Mods = mods,
                 MaxCombo = beatmap.GetMaxCombo(),
+
+                SpeedDifficulty = speedValue,
+                PrecisionDifficulty = precisionValue,
+                ReadingDifficulty = readingValue,
             };
 
             return attributes;
@@ -74,7 +88,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 
             return new Skill[]
             {
-                new Movement(mods, halfCatcherWidth, clockRate),
+                new Speed(mods, halfCatcherWidth, clockRate),
+                new Precision(mods, halfCatcherWidth, clockRate,beatmap.Difficulty.CircleSize),
+                new Reading(mods, halfCatcherWidth, clockRate),
             };
         }
 
@@ -85,5 +101,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             new CatchModHardRock(),
             new CatchModEasy(),
         };
+
+        
     }
 }

@@ -8,10 +8,12 @@ using System.Text.RegularExpressions;
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
-using osu.Game.Rulesets.Catch.Objects;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Objects;
+using osu.Game.Rulesets.Objects.Types;
+using osu.Game.Rulesets.Catch.Objects;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
@@ -31,6 +33,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
     }
     public class CatchDifficultyHitObject : DifficultyHitObject
     {
+
+        private readonly List<CatchDifficultyHitObject> catchDifficultyHitObjects;
+        
         public new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
 
         public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
@@ -62,6 +67,13 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
         public readonly bool IsHyper;
 
+        /// <summary>
+        /// Higher means the object is near the edge, thus requiring higher precision.
+        /// </summary>
+        public readonly double EdgeRatio;
+
+        public Flow Flow { get; set; }
+
         public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
         {
@@ -70,49 +82,78 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             // float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
             // NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
             // LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
-         
+
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
-            //Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
-            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate)*halfCatcherWidth/2;
+            // Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
+            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate) * halfCatcherWidth / 2;
 
             // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
             StrainTime = Math.Max(25, DeltaTime);
 
-            jumpType = getJumpType(halfCatcherWidth);
+            jumpType = getJumpType(halfCatcherWidth, EdgeRatio);
 
-            CatcherSpeed = clockRate * getHyperDashSpeed(BaseObject);
-            
-            IsHyper = LastObject.hyperDash;
+            CatcherSpeed = clockRate * getHyperDashSpeed(this);
+
+            IsHyper = LastObject.HyperDash;
+
+            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
+
+            catchDifficultyHitObjects = objects.Cast<CatchDifficultyHitObject>().ToList();
+
+            Flow = new Flow(this, halfCatcherWidth);
+
+            Index = index;
         }
 
         double getExpectableInertia(double clockRate)
         {
-            return Match.Clamp(Math.Sqrt(getHyperDashSpeed(base.Previous(0)) / clockRate),1,2)-1;
+            var prev = base.Previous(0);
+            if (prev is CatchDifficultyHitObject p)
+                return Math.Clamp(Math.Sqrt(getHyperDashSpeed(p) / clockRate), 1, 2) - 1;
+            return 0;
         }
 
-        double getHyperDashSpeed(PalpableCatchHitObject current){
-            return Math.Max(1,(current.EffectiveX-current.Previous(0).EffectiveX) / Math.Max(1.0, DeltaTime - 1000.0 / 60.0));
+        double getHyperDashSpeed(CatchDifficultyHitObject current){
+            var prev = LastObject;
+            if (prev == null)
+                return 1;
+
+            double dx = current.BaseObject.EffectiveX - prev.EffectiveX;
+            double dt = Math.Max(1.0, DeltaTime - 1000.0 / 60.0);
+            return Math.Max(1, dx / dt);
         }
 
-        int getJumpType(float halfCatcherSize)
+        JumpType getJumpType(float halfCatcherSize, double edgeRatio)
         {
-            int jumpType = 0;
-            if (PlayerMoved > halfCatcherSize*1.2)
+            if (PlayerMoved <= halfCatcherSize * 1.2)
+                return JumpType.Standstill;
+
+            if (LastObject.HyperDash)
+                return (JumpType)(5 * Math.Sign(PlayerMoved));
+
+            double speed = PlayerMoved / StrainTime;
+
+            if (speed >= 0.875)
             {
-                jumpType = 1;
-                if (LastObject.hyperDash){
-                    jumpType = 5;
-                }else if (PlayerMoved/StrainTime >= 0.5){
-                    jumpType = 2;
-                    if ((PlayerMoved-halfCatcherSize)/StrainTime > 0.9)
-                    {
-                        jumpType = 4;
-                    }else jumpType = 3;
-                }
-                jumpType *= Math.Sign(PlayerMoved);
+                if (edgeRatio > 0.9)
+                    return (JumpType)(4 * Math.Sign(PlayerMoved)); // EdgeDash
+                return (JumpType)(3 * Math.Sign(PlayerMoved));     // Dash
             }
-            return jumpType;
+
+            return (JumpType)(2 * Math.Sign(PlayerMoved));         // MidDash
+        }
+
+        public new CatchDifficultyHitObject Previous(int backwardsIndex = 0)
+        {
+            int index = Index - (backwardsIndex + 1);
+            return index >= 0 && index < catchDifficultyHitObjects.Count ? catchDifficultyHitObjects[index] : null;
+        }
+
+        public new CatchDifficultyHitObject Next(int forwardsIndex = 0)
+        {
+            int index = Index + (forwardsIndex + 1);
+            return index >= 0 && index < catchDifficultyHitObjects.Count ? catchDifficultyHitObjects[index] : null;
         }
     }
 }

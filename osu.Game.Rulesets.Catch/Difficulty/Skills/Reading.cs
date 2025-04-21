@@ -10,6 +10,24 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 {
     public class Reading : StrainDecaySkill
     {
+        protected override double SkillMultiplier => 1;
+        protected override double StrainDecayBase => 0.8;
+        protected override double DecayWeight => 0.75;
+        protected override int SectionLength => 2000;
 
+        protected readonly float HalfCatcherWidth;
+        private readonly double catcherSpeedMultiplier;
+
+        public Reading(Mod[] mods, float halfCatcherWidth, double clockRate)
+            : base(mods)
+        {
+            HalfCatcherWidth = halfCatcherWidth;
+            catcherSpeedMultiplier = clockRate;
+        }
+
+        protected override double StrainValueOf(DifficultyHitObject current)
+        {
+            return ReadingEvaluator.EvaluateDifficultyOf(current);
+        }
     }
 }
