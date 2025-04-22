@@ -43,13 +43,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             FlowTypes = new FlowType[3];
             IsValid = false;
 
-            var previous = (CatchDifficultyHitObject)start.Previous(0);
+            var pre = start.Previous(0);
+            var previous = (CatchDifficultyHitObject)pre;
 
             // validation: only consider start of a new flow when jumpType group changes
-            if (previous == null || GetFlowType(start.jumpType) == GetFlowType(previous.jumpType))
+            if ( previous == null || GetFlowType(start.jumpType) == GetFlowType(previous.jumpType))
                 return;
 
             IsValid = true;
+            Console.WriteLine("isValid True");
 
             List<CatchDifficultyHitObject> distancesInFlowList = new();
             CatchDifficultyHitObject? current = previous;

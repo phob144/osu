@@ -15,6 +15,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         public static double EvaluateDifficultyOf(DifficultyHitObject current)
         {
+
             var obj = (CatchDifficultyHitObject)current;
             var flow = obj.Flow;
 
@@ -32,18 +33,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 GetTransitionCost(s1, s2);
 
             // Apply rule-based difficulty modifiers
-            if (f0 * f2 < 0) // normal flow nerf
+            if (f0 * f2 < 0) // curved flow nerf
                 keyDifficulty -= 0.5;
 
-            if (f0 == f2 && Math.Abs(f0) == 2 && (f1 == 0 || f1 == -Math.Sign(f0))) // tapdash bonus
-                keyDifficulty += 0.5;
-
-            if ((f0 == 2 && f1 == -2 && f2 == 2) || (f0 == -2 && f1 == 2 && f2 == -2)) // wiggle bonus
-                keyDifficulty += 1.5;
+            if (f0 == f2 && Math.Abs(f0) == 2) // tapdash/wiggle flow buff
+                keyDifficulty += 0.25 * Math.Abs(f1 - f0);
 
             // Normalize and scale with speed bonus based on time
             double speedBonus = 0.5 / Math.Max(flow.StrainTimeOfFlow.Sum(), 1);
-            return speedBonus * Math.Pow(keyDifficulty,2)  * 0.25;
+            return speedBonus * keyDifficulty  * 0.25;
         }
 
         private static bool[] GetKeyState(int flowType)
