@@ -13,11 +13,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         public static double EvaluateDifficultyOf(DifficultyHitObject current)
         {
-            var obj = current as CatchDifficultyHitObject;
-            var flow = obj?.Flow;
-
-            if (flow == null || !flow.IsValid)
-                return 0;
+            var obj = (CatchDifficultyHitObject)current;
+            var flow = obj.Flow;
 
             // bonus from wide jumps which makes actual playfield reading wider
             double max1 = 0, max2 = 0, max3 = 0;

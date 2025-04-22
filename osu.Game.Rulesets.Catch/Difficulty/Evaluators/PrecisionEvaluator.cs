@@ -13,11 +13,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         public static double EvaluateDifficultyOf(DifficultyHitObject current, float CircleSize)
         {
-            var obj = current as CatchDifficultyHitObject;
-            var flow = obj?.Flow;
-
-            if (flow == null || !flow.IsValid)
-                return 0;
+            var obj = (CatchDifficultyHitObject)current;
+            var flow = obj.Flow;
 
             double precisionBonus = 1;
 

@@ -1,3 +1,4 @@
+using Microsoft.VisualBasic.CompilerServices;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -63,8 +64,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
         protected override IEnumerable<DifficultyHitObject> CreateDifficultyHitObjects(IBeatmap beatmap, double clockRate)
         {
             CatchHitObject? lastObject = null;
-
-            List<CatchDifficultyHitObject> catchObjects = new List<CatchDifficultyHitObject>();
+            List<DifficultyHitObject> objects = new List<DifficultyHitObject>();
 
             foreach (var hitObject in CatchBeatmap.GetPalpableObjects(beatmap.HitObjects))
             {
@@ -73,20 +73,20 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 
                 if (lastObject != null)
                 {
-                    catchObjects.Add(new CatchDifficultyHitObject(
+                    objects.Add(new CatchDifficultyHitObject(
                         hitObject,
                         lastObject,
                         clockRate,
                         halfCatcherWidth,
-                        catchObjects.Cast<DifficultyHitObject>().ToList(),
-                        catchObjects.Count
+                        objects,
+                        objects.Count
                     ));
                 }
 
                 lastObject = hitObject;
             }
 
-            return catchObjects;
+            return objects;
         }
 
         protected override Skill[] CreateSkills(IBeatmap beatmap, Mod[] mods, double clockRate)

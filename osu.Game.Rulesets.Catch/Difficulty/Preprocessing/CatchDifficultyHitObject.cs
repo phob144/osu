@@ -1,3 +1,4 @@
+using System.Security.AccessControl;
 using System.Net.Http.Headers;
 using System.ComponentModel;
 using System.Reflection;
@@ -12,8 +13,8 @@ using System.Linq;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Objects;
-using osu.Game.Rulesets.Objects.Types;
 using osu.Game.Rulesets.Catch.Objects;
+using osu.Game.Rulesets.Objects.Types;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
@@ -31,58 +32,31 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         EdgeDashToRight = 4,
         HyperDashToRight = 5
     }
+
     public class CatchDifficultyHitObject : DifficultyHitObject
     {
+        private List<CatchDifficultyHitObject> catchDifficultyHitObjects;
 
-        private readonly List<CatchDifficultyHitObject> catchDifficultyHitObjects;
-        
         public new PalpableCatchHitObject BaseObject => (PalpableCatchHitObject)base.BaseObject;
-
         public new PalpableCatchHitObject LastObject => (PalpableCatchHitObject)base.LastObject;
 
         public readonly float NormalizedPosition;
         public readonly float LastNormalizedPosition;
-
         private const float normalized_hitobject_radius = 41.0f;
 
-        /// <summary>
-        /// Exact Distance Value between 2 notes
-        /// </summary>
         public readonly double DistanceMoved;
-        
-        /// <summary>
-        /// Adjusted Distance Value with Hyperdash Inertia 
-        /// </summary>
         public readonly double PlayerMoved;
-
-        /// <summary>
-        /// Milliseconds elapsed since the start time of the previous <see cref="CatchDifficultyHitObject"/>, with a minimum of 25ms.
-        /// </summary>
         public readonly double StrainTime;
-
-        /// <summary>
-        /// Jump type judged by direction and distance in 11 different types
-        /// 0 - standstill, 1 - walk, 2 - middash, 3 - normal dash, 4 - edge dash and 5 - hyperdash. negative - movement to the left, positive - movement to the right
-        /// </summary>
         public readonly JumpType jumpType;
-        /// <summary>
-        /// Catcher speed modified by mods and hyperdash
-        /// </summary>
         public readonly double CatcherSpeed;
-
         public readonly bool IsHyper;
-
-        /// <summary>
-        /// Higher means the object is near the edge, thus requiring higher precision.
-        /// </summary>
         public readonly double EdgeRatio;
 
-        public Flow Flow { get; set; }
+        public Flow Flow { get; private set; }
 
-        public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth,List<DifficultyHitObject> objects, int index)
-            : base(hitObject, lastObject, clockRate, objects, index)
+        public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
+            : base(hitObject, lastObject, clockRate, new List<DifficultyHitObject>(), index)
         {
-            // We will scale everything by this factor, so we can assume a uniform CircleSize among beatmaps.
             float scalingFactor = normalized_hitobject_radius / halfCatcherWidth;
 
             NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
@@ -90,28 +64,18 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
-            // Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
-            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate) * halfCatcherWidth / 2;            
-
-            // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
-            StrainTime = Math.Max(25, DeltaTime);
-
-            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
-
-            CatcherSpeed = clockRate * getHyperDashSpeed(this);
-
-            IsHyper = LastObject.HyperDash;
-
             catchDifficultyHitObjects = objects.Cast<CatchDifficultyHitObject>().ToList();
-
             Flow = new Flow(this, halfCatcherWidth);
-
             Index = index;
-
+            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate) * halfCatcherWidth / 2;
+            StrainTime = Math.Max(25, DeltaTime);
+            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
+            CatcherSpeed = clockRate * getHyperDashSpeed(this);
+            IsHyper = LastObject.HyperDash;
             jumpType = getJumpType(PlayerMoved, halfCatcherWidth, EdgeRatio);
         }
 
-        double getExpectableInertia(double clockRate)
+        private double getExpectableInertia(double clockRate)
         {
             var prev = base.Previous(0);
             if (prev is CatchDifficultyHitObject p)
@@ -119,7 +83,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return 0;
         }
 
-        double getHyperDashSpeed(CatchDifficultyHitObject current){
+        private double getHyperDashSpeed(CatchDifficultyHitObject current)
+        {
             var prev = LastObject;
             if (prev == null)
                 return 1;
@@ -129,7 +94,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return Math.Max(1, dx / dt);
         }
 
-        JumpType getJumpType(double PlayerMoved, float halfCatcherSize, double edgeRatio)
+        private JumpType getJumpType(double PlayerMoved, float halfCatcherSize, double edgeRatio)
         {
             if (PlayerMoved <= halfCatcherSize * 1.2)
                 return JumpType.Standstill;
@@ -142,27 +107,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             if (speed >= 0.875)
             {
                 if (edgeRatio > 0.9)
-                    return (JumpType)(4 * Math.Sign(PlayerMoved)); // EdgeDash
-                return (JumpType)(3 * Math.Sign(PlayerMoved));     // Dash
+                    return (JumpType)(4 * Math.Sign(PlayerMoved));
+                return (JumpType)(3 * Math.Sign(PlayerMoved));
             }
 
-            return (JumpType)(2 * Math.Sign(PlayerMoved));         // MidDash
-        }
-
-        public new CatchDifficultyHitObject? Previous(int backwardsIndex)
-        {
-            int index = Index - (backwardsIndex + 1);
-            return index >= 0 && index < catchDifficultyHitObjects.Count
-                ? catchDifficultyHitObjects[index]
-                : null;
-        }
-
-        public new CatchDifficultyHitObject? Next(int forwardsIndex)
-        {
-            int index = Index + (forwardsIndex + 1);
-            return index >= 0 && index < catchDifficultyHitObjects.Count
-                ? catchDifficultyHitObjects[index]
-                : null;
+            return (JumpType)(2 * Math.Sign(PlayerMoved));
         }
     }
 }

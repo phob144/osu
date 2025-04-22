@@ -15,11 +15,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         public static double EvaluateDifficultyOf(DifficultyHitObject current)
         {
-            var obj = current as CatchDifficultyHitObject;
-            var flow = obj?.Flow;
-
-            if (flow == null || !flow.IsValid)
-                return 0;
+            var obj = (CatchDifficultyHitObject)current;
+            var flow = obj.Flow;
 
             var f0 = (int)flow.FlowTypes[0];
             var f1 = (int)flow.FlowTypes[1];

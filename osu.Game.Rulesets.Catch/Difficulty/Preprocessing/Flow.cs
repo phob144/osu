@@ -11,28 +11,28 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
     public enum FlowType
     {
-        DashToLeft = -2, // {-5, -4, -3}
-        WalkToLeft = -1, // {-2, -1}
-        StandStill = 0,  // {0}
-        WalkToRight = 1, // {1, 2}
-        DashToRight = 2  // {3, 4, 5}
+        DashToLeft = -2,  // {-5, -4, -3}
+        WalkToLeft = -1,  // {-2, -1}
+        StandStill = 0,   // {0}
+        WalkToRight = 1,  // {1, 2}
+        DashToRight = 2   // {3, 4, 5}
     }
 
     public class Flow
     {
-        // list of hitobjects involved in this flow segment
+        // list of hitobjects involved in this flow segment, in reversed order (from current going backward)
         public readonly CatchDifficultyHitObject[] DistancesInFlow;
 
-        // movement distances for each part of the flow
+        // movement distances per segment group
         public readonly double[] DistanceMovedOfFlow;
 
-        // strain times for each part of the flow
+        // strain time per segment group
         public readonly double[] StrainTimeOfFlow;
 
-        // checking only key input changes of flows
+        // flow types, ordered from past to present
         public readonly FlowType[] FlowTypes;
 
-        // false if this hitobject is not the beginning of a new flow
+        // true only if the current hitobject starts a new flow
         public readonly bool IsValid;
 
         public Flow(CatchDifficultyHitObject start, double halfCatcherWidth)
@@ -43,37 +43,36 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             FlowTypes = new FlowType[3];
             IsValid = false;
 
-            var next = (CatchDifficultyHitObject)start.Next(0);
-            var prev = (CatchDifficultyHitObject)start.Previous(0);
-            if (next == null || prev == null)
-            return;
+            var previous = (CatchDifficultyHitObject)start.Previous(0);
 
-            if (GetFlowType(start.jumpType) == GetFlowType(next.jumpType))
-            return;
+            // validation: only consider start of a new flow when jumpType group changes
+            if (previous == null || GetFlowType(start.jumpType) == GetFlowType(previous.jumpType))
+                return;
 
             IsValid = true;
 
-            CatchDifficultyHitObject? current = start;
             List<CatchDifficultyHitObject> distancesInFlowList = new();
-            FlowType prevGroup = GetFlowType(current.jumpType);
-            int groupIndex = 0;
+            CatchDifficultyHitObject? current = previous;
+            FlowType prevGroup = GetFlowType(previous.jumpType);
+            int groupIndex = 2;
+
             FlowTypes[groupIndex] = prevGroup;
 
             double workingDistance = 0;
             double workingStrain = 0;
 
-            while (current != null && groupIndex < 3)
+            while (current != null && groupIndex >= 0)
             {
                 var currentGroup = GetFlowType(current.jumpType);
 
                 if (currentGroup != prevGroup)
                 {
-                    // 기록 후 다음 그룹으로
+                    // store values for the current group
                     DistanceMovedOfFlow[groupIndex] = workingDistance;
                     StrainTimeOfFlow[groupIndex] = workingStrain;
 
-                    groupIndex++;
-                    if (groupIndex >= 3)
+                    groupIndex--;
+                    if (groupIndex < 0)
                         break;
 
                     FlowTypes[groupIndex] = currentGroup;
@@ -86,7 +85,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
                 distancesInFlowList.Add(current);
 
                 prevGroup = currentGroup;
-                current = current.Next(0);
+                current = (CatchDifficultyHitObject)current.Previous(0);
+            }
+
+            // store last collected group
+            if (groupIndex >= 0)
+            {
+                DistanceMovedOfFlow[groupIndex] = workingDistance;
+                StrainTimeOfFlow[groupIndex] = workingStrain;
             }
 
             DistancesInFlow = distancesInFlowList.ToArray();
