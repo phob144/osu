@@ -79,7 +79,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
         public Flow Flow { get; set; }
 
-        public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
+        public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth,List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
         {
             // We will scale everything by this factor, so we can assume a uniform CircleSize among beatmaps.
@@ -91,24 +91,24 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
 
             // Inertia comes stronger from faster hyperdash and the reading error comes from bigger cs because edge of catcher is where to judge hdash
-            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate) * halfCatcherWidth / 2;
+            PlayerMoved = DistanceMoved + getExpectableInertia(clockRate) * halfCatcherWidth / 2;            
 
             // Every strain interval is hard capped at the equivalent of 25ms as a safety measure which is 1/8snap in bpm300
             StrainTime = Math.Max(25, DeltaTime);
 
-            jumpType = getJumpType(halfCatcherWidth, EdgeRatio);
+            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
 
             CatcherSpeed = clockRate * getHyperDashSpeed(this);
 
             IsHyper = LastObject.HyperDash;
-
-            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
 
             catchDifficultyHitObjects = objects.Cast<CatchDifficultyHitObject>().ToList();
 
             Flow = new Flow(this, halfCatcherWidth);
 
             Index = index;
+
+            jumpType = getJumpType(PlayerMoved, halfCatcherWidth, EdgeRatio);
         }
 
         double getExpectableInertia(double clockRate)
@@ -129,7 +129,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return Math.Max(1, dx / dt);
         }
 
-        JumpType getJumpType(float halfCatcherSize, double edgeRatio)
+        JumpType getJumpType(double PlayerMoved, float halfCatcherSize, double edgeRatio)
         {
             if (PlayerMoved <= halfCatcherSize * 1.2)
                 return JumpType.Standstill;
@@ -149,16 +149,20 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return (JumpType)(2 * Math.Sign(PlayerMoved));         // MidDash
         }
 
-        public new CatchDifficultyHitObject Previous(int backwardsIndex = 0)
+        public new CatchDifficultyHitObject? Previous(int backwardsIndex)
         {
             int index = Index - (backwardsIndex + 1);
-            return index >= 0 && index < catchDifficultyHitObjects.Count ? catchDifficultyHitObjects[index] : null;
+            return index >= 0 && index < catchDifficultyHitObjects.Count
+                ? catchDifficultyHitObjects[index]
+                : null;
         }
 
-        public new CatchDifficultyHitObject Next(int forwardsIndex = 0)
+        public new CatchDifficultyHitObject? Next(int forwardsIndex)
         {
             int index = Index + (forwardsIndex + 1);
-            return index >= 0 && index < catchDifficultyHitObjects.Count ? catchDifficultyHitObjects[index] : null;
+            return index >= 0 && index < catchDifficultyHitObjects.Count
+                ? catchDifficultyHitObjects[index]
+                : null;
         }
     }
 }

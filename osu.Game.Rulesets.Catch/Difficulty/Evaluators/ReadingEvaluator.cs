@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -29,7 +30,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             }
             double max3Sum = max1 + max2 + max3;
 
-            double readingBonus = Math.Pow(Math.Max(max3Sum / 1536.0, 5), 2) * 1.0625;
+            double readingBonus = Math.Pow(Math.Max(max3Sum / 3072.0, 5), 2) * 1.0625;
 
             // bonus from totaldistance/totalstraintime value for reading strain
             double ratio = flow.DistanceMovedOfFlow.Sum() / Math.Max(flow.StrainTimeOfFlow.Sum(), 1);
@@ -45,7 +46,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double irregularityWeight = Math.Pow(1 + cv, 0.3);
 
             // Final score: product of all weights
-            return readingBonus * movementWeight * irregularityWeight;
+            return readingBonus * movementWeight * irregularityWeight / 350;
         }
     }
 }

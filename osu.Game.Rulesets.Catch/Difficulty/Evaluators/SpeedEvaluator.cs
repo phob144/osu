@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Text.RegularExpressions;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -43,7 +46,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
             // Normalize and scale with speed bonus based on time
             double speedBonus = 0.5 / Math.Max(flow.StrainTimeOfFlow.Sum(), 1);
-            return keyDifficulty * speedBonus;
+            return speedBonus * Math.Pow(keyDifficulty,2)  * 0.25;
         }
 
         private static bool[] GetKeyState(int flowType)

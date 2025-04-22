@@ -20,7 +20,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 {
     public class CatchDifficultyCalculator : DifficultyCalculator
     {
-        private const double difficulty_multiplier = 4.59;
+        private const double difficulty_multiplier = 1;
 
         private float halfCatcherWidth;
 
@@ -64,22 +64,29 @@ namespace osu.Game.Rulesets.Catch.Difficulty
         {
             CatchHitObject? lastObject = null;
 
-            List<DifficultyHitObject> objects = new List<DifficultyHitObject>();
+            List<CatchDifficultyHitObject> catchObjects = new List<CatchDifficultyHitObject>();
 
-            // In 2B beatmaps, it is possible that a normal Fruit is placed in the middle of a JuiceStream.
             foreach (var hitObject in CatchBeatmap.GetPalpableObjects(beatmap.HitObjects))
             {
-                // We want to only consider fruits that contribute to the combo.
                 if (hitObject is Banana || hitObject is TinyDroplet)
                     continue;
 
                 if (lastObject != null)
-                    objects.Add(new CatchDifficultyHitObject(hitObject, lastObject, clockRate, halfCatcherWidth, objects, objects.Count));
+                {
+                    catchObjects.Add(new CatchDifficultyHitObject(
+                        hitObject,
+                        lastObject,
+                        clockRate,
+                        halfCatcherWidth,
+                        catchObjects.Cast<DifficultyHitObject>().ToList(),
+                        catchObjects.Count
+                    ));
+                }
 
                 lastObject = hitObject;
             }
 
-            return objects;
+            return catchObjects;
         }
 
         protected override Skill[] CreateSkills(IBeatmap beatmap, Mod[] mods, double clockRate)

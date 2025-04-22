@@ -43,48 +43,50 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             FlowTypes = new FlowType[3];
             IsValid = false;
 
-            var previous = start.Previous(0);
-            if (previous == null || GetFlowType(start.jumpType) == GetFlowType(previous.jumpType))
-                return;
+            var next = (CatchDifficultyHitObject)start.Next(0);
+            var prev = (CatchDifficultyHitObject)start.Previous(0);
+            if (next == null || prev == null)
+            return;
+
+            if (GetFlowType(start.jumpType) == GetFlowType(next.jumpType))
+            return;
 
             IsValid = true;
 
+            CatchDifficultyHitObject? current = start;
             List<CatchDifficultyHitObject> distancesInFlowList = new();
-            int jumpTypeChangeCount = 0;
-            int i = 0;
+            FlowType prevGroup = GetFlowType(current.jumpType);
+            int groupIndex = 0;
+            FlowTypes[groupIndex] = prevGroup;
 
-            // walk through next hitobjects to build a flow of up to 3 segments
-            while (jumpTypeChangeCount < 3)
+            double workingDistance = 0;
+            double workingStrain = 0;
+
+            while (current != null && groupIndex < 3)
             {
-                var current = start.Next(i);
-                if (current == null)
-                    break;
-
-                distancesInFlowList.Add(current);
-
                 var currentGroup = GetFlowType(current.jumpType);
 
-                if (i > 0)
+                if (currentGroup != prevGroup)
                 {
-                    var prev = start.Next(i - 1);
-                    if (prev == null)
+                    // 기록 후 다음 그룹으로
+                    DistanceMovedOfFlow[groupIndex] = workingDistance;
+                    StrainTimeOfFlow[groupIndex] = workingStrain;
+
+                    groupIndex++;
+                    if (groupIndex >= 3)
                         break;
 
-                    var prevGroup = GetFlowType(prev.jumpType);
-
-                    if (prevGroup != currentGroup)
-                    {
-                        jumpTypeChangeCount++;
-                        if (jumpTypeChangeCount >= 3)
-                            break;
-                    }
+                    FlowTypes[groupIndex] = currentGroup;
+                    workingDistance = 0;
+                    workingStrain = 0;
                 }
 
-                FlowTypes[jumpTypeChangeCount] = currentGroup;
-                DistanceMovedOfFlow[jumpTypeChangeCount] += current.DistanceMoved;
-                StrainTimeOfFlow[jumpTypeChangeCount] += current.StrainTime;
+                workingDistance += current.DistanceMoved;
+                workingStrain += current.StrainTime;
+                distancesInFlowList.Add(current);
 
-                i++;
+                prevGroup = currentGroup;
+                current = current.Next(0);
             }
 
             DistancesInFlow = distancesInFlowList.ToArray();
