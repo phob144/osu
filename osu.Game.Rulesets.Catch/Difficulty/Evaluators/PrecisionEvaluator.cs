@@ -34,11 +34,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     edgeDashCount++;
                     edgeRatioSum += o.EdgeRatio;
                 }
+                
             }
 
+            //TODO: currently it detects only the first 3 middash/edge dash but its better to get top3 of most ambiguous middash(middle of full walk and full dash)
+            //TODO: and the most harsh edgeDash. also it's better to detect edge dashes from different flow since it counts not once when edgedashes are on same direction
+
             double midDashWeight = CircleSize * 0.05 * Math.Sqrt(midDashCount);
-            double edgeDashWeight = edgeDashCount > 0 ? edgeRatioSum / Math.Sqrt(edgeDashCount) : 0;
-            double inputPrecisionBonus = 1 + (midDashWeight + edgeDashWeight) / 3.0;
+            double edgeDashWeight = edgeDashCount > 0 ? edgeRatioSum : 0;
+            double inputPrecisionBonus = 1 + (midDashWeight + edgeDashWeight);
 
             precisionBonus *= inputPrecisionBonus; // middash, edgddash bonus
 
@@ -46,17 +50,21 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double average = strainTimes.Average();
             double std = Math.Sqrt(strainTimes.Select(v => Math.Pow(v - average, 2)).Average());
             double cv = average > 0 ? std / average : 0;
-            double irregularityBonus = Math.Pow(1 + cv, 0.3);
+            double irregularityBonus = Math.Pow(1 + cv, 0.5);
 
             precisionBonus *= irregularityBonus; // inconsistent rhythm bonus
 
-            double environmentBonus = Math.Sqrt(obj.CatcherSpeed)
-                * Math.Pow(CircleSize, 1.5)
-                / 20.0;
+            double averageCatcherSpeed = flow.DistancesInFlow.Length > 0
+            ? flow.DistancesInFlow.Average(o => o.CatcherSpeed)
+            : obj.CatcherSpeed;;
+
+            double environmentBonus = Math.Sqrt(Math.Min(averageCatcherSpeed,3)) * Math.Pow(CircleSize, 1.5)/ 450.0;
 
             precisionBonus *= environmentBonus; // cs,catcher speed bonus
 
-            return precisionBonus/15;
+            return Math.Max(precisionBonus,0.00001);
+
+            // TODO: make Inertia public in Flow and If it's the opposite side of next object, give proper bonus <- this can give more bonus on hyperchain
         }
     }
 }

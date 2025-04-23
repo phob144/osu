@@ -23,6 +23,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var f1 = (int)flow.FlowTypes[1];
             var f2 = (int)flow.FlowTypes[2];
 
+            Console.WriteLine($"0: {f0}, 1: {f1}, 2: {f2}");
+
+            // Checking key states of each flow
             var s0 = GetKeyState(f0);
             var s1 = GetKeyState(f1);
             var s2 = GetKeyState(f2);
@@ -36,12 +39,21 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             if (f0 * f2 < 0) // curved flow nerf
                 keyDifficulty -= 0.5;
 
-            if (f0 == f2 && Math.Abs(f0) == 2) // tapdash/wiggle flow buff
-                keyDifficulty += 0.25 * Math.Abs(f1 - f0);
+            if (f0 == f2 && Math.Abs(f0) == 2) // tapdash / wiggle flow buff
+                keyDifficulty += 0.025 * Math.Pow(Math.Abs(f1 - f0),4);
+
+
+            double adjustedTotalStrain = Math.Max(flow.StrainTimeOfFlow.Sum(), 75);
+            double powValue=1.5;
 
             // Normalize and scale with speed bonus based on time
-            double speedBonus = 0.5 / Math.Max(flow.StrainTimeOfFlow.Sum(), 1);
-            return speedBonus * keyDifficulty  * 0.25;
+            double speedBonus = 0.0275 / Math.Pow(adjustedTotalStrain/165,powValue);
+            speedBonus *= Math.Max(keyDifficulty,0.01);
+
+            return Math.Max(speedBonus,0.00001);
+
+            //TODO : it doens't detect well if it's even fulldashable. so it broke antineuro
+            //TODO : it doesn't reward wiggles well
         }
 
         private static bool[] GetKeyState(int flowType)
@@ -64,9 +76,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             for (int i = 0; i < 3; i++)
             {
                 if (!from[i] && to[i])
-                    cost += (i == 2) ? 0.75 : 1.0; // Dash: 0.75, Direction: 1.0
+                    cost += (i == 2) ? 0.5 : 1.75; // Dash: 0.75, Direction: 1.0
                 else if (from[i] && !to[i])
-                    cost += 0.25;
+                    cost += (i == 2) ? 0.1 : 0.4;
             }
 
             return cost;

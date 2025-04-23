@@ -35,6 +35,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         // true only if the current hitobject starts a new flow
         public readonly bool IsValid;
 
+        private double HalfCatcherWidth;
+
         public Flow(CatchDifficultyHitObject start, double halfCatcherWidth)
         {
             DistancesInFlow = Array.Empty<CatchDifficultyHitObject>();
@@ -42,20 +44,23 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             StrainTimeOfFlow = new double[3];
             FlowTypes = new FlowType[3];
             IsValid = false;
+            HalfCatcherWidth = halfCatcherWidth;
 
             var pre = start.Previous(0);
             var previous = (CatchDifficultyHitObject)pre;
+            if (previous == null)
+                return;
+            var prevPrev = (CatchDifficultyHitObject?)previous.Previous(0);
 
             // validation: only consider start of a new flow when jumpType group changes
-            if ( previous == null || GetFlowType(start.jumpType) == GetFlowType(previous.jumpType))
+            if (prevPrev == null || GetFlowType(prevPrev.jumpType, previous.jumpType, previous.StrainTime) == GetFlowType(previous.jumpType, start.jumpType, start.StrainTime))
                 return;
 
             IsValid = true;
-            Console.WriteLine("isValid True");
 
             List<CatchDifficultyHitObject> distancesInFlowList = new();
             CatchDifficultyHitObject? current = previous;
-            FlowType prevGroup = GetFlowType(previous.jumpType);
+            FlowType prevGroup = GetFlowType(prevPrev.jumpType, previous.jumpType, previous.StrainTime);
             int groupIndex = 2;
 
             FlowTypes[groupIndex] = prevGroup;
@@ -65,7 +70,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
             while (current != null && groupIndex >= 0)
             {
-                var currentGroup = GetFlowType(current.jumpType);
+
+                var currentPrev = (CatchDifficultyHitObject?)current.Previous(0);
+                if (currentPrev == null) break;
+                var currentGroup = GetFlowType(currentPrev.jumpType, current.jumpType, current.StrainTime);
 
                 if (currentGroup != prevGroup)
                 {
@@ -101,15 +109,36 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         }
 
         // maps jumpType value to flow group
-        private FlowType GetFlowType(JumpType jumpType)
+        private FlowType GetFlowType(JumpType prevJump, JumpType currentJump, double strainTime)
         {
-            int value = (int)jumpType;
+            int curr = (int)currentJump;
+            int prev = (int)prevJump;
 
-            if (value <= -3) return FlowType.DashToLeft;
-            if (value <= -1) return FlowType.WalkToLeft;
-            if (value == 0) return FlowType.StandStill;
-            if (value <= 2) return FlowType.WalkToRight;
+            bool sameDirection = (prev * curr > 0);
+            bool prevIsStrong = Math.Abs(prev) >= 3;
+            bool wideDashZone = HalfCatcherWidth > strainTime;
+            bool treatAsDash = sameDirection && prevIsStrong && wideDashZone;
+
+            if (curr <= -3 || (curr <= -1 && treatAsDash))
+                return FlowType.DashToLeft;
+
+            if (curr <= -1)
+                return FlowType.WalkToLeft;
+
+            if (curr == 0)
+                return FlowType.StandStill;
+
+            if (curr <= 2)
+            {
+                if (treatAsDash)
+                    return FlowType.DashToRight;
+
+                return FlowType.WalkToRight;
+            }
+
             return FlowType.DashToRight;
         }
+
+        //TODO: any idea to detect if player decides not to standstill on standstillable stuff -> ignorable standstill in hyperchain or wiggle
     }
 }
