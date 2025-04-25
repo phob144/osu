@@ -1,9 +1,9 @@
-using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Text.RegularExpressions;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Text.RegularExpressions;
 using System;
 using System.Linq;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
@@ -13,47 +13,43 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 {
     public static class SpeedEvaluator
     {
-        public static double EvaluateDifficultyOf(DifficultyHitObject current)
+        public static double EvaluateDifficultyOf(DifficultyHitObject current, float halfCatcherWidth)
         {
-
             var obj = (CatchDifficultyHitObject)current;
             var flow = obj.Flow;
+            var HalfCatcherWidth = halfCatcherWidth;
 
             var f0 = (int)flow.FlowTypes[0];
             var f1 = (int)flow.FlowTypes[1];
             var f2 = (int)flow.FlowTypes[2];
 
-            Console.WriteLine($"0: {f0}, 1: {f1}, 2: {f2}");
-
-            // Checking key states of each flow
             var s0 = GetKeyState(f0);
             var s1 = GetKeyState(f1);
             var s2 = GetKeyState(f2);
 
-            // Sum of key transition costs across the 3 flow segments
             double keyDifficulty =
                 GetTransitionCost(s0, s1) +
                 GetTransitionCost(s1, s2);
 
-            // Apply rule-based difficulty modifiers
-            if (f0 * f2 < 0) // curved flow nerf
+            // Curved flow penalty
+            if (f0 * f2 < 0)
                 keyDifficulty -= 0.5;
 
-            if (f0 == f2 && Math.Abs(f0) == 2) // tapdash / wiggle flow buff
-                keyDifficulty += 0.025 * Math.Pow(Math.Abs(f1 - f0),4);
-
+            // Tapdash/Standstillable bonus
+            if (f0 == f2 && Math.Abs(f0) == 2)
+            {
+                keyDifficulty += 0.25 * Math.Abs(f1 - f0);
+            }
 
             double adjustedTotalStrain = Math.Max(flow.StrainTimeOfFlow.Sum(), 75);
-            double powValue=1.5;
+            double powValue = adjustedTotalStrain >= 220 ? 1.5 : 1.05;
 
-            // Normalize and scale with speed bonus based on time
-            double speedBonus = 0.0275 / Math.Pow(adjustedTotalStrain/165,powValue);
-            speedBonus *= Math.Max(keyDifficulty,0.01);
+            double speedBonus = 1 / (Math.Pow(adjustedTotalStrain / 220, powValue) * 135);
+            speedBonus *= Math.Pow(keyDifficulty,1.25) * Math.Max(1 - 1.0/6.0 * Math.Min(obj.BuzzCount,6), 0.001);
 
-            return Math.Max(speedBonus,0.00001);
+            return Math.Max(speedBonus, 0.00001);
 
-            //TODO : it doens't detect well if it's even fulldashable. so it broke antineuro
-            //TODO : it doesn't reward wiggles well
+            // TODO : need to test more but it checks 280 stream flow as like 210wiggleish (actually if flow change happens in 75% rate it's true but need to look how it detects) 
         }
 
         private static bool[] GetKeyState(int flowType)
@@ -65,7 +61,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                  0 => new[] { false, false, false },
                  1 => new[] { false, true, false },
                  2 => new[] { false, true, true },
-                _  => new[] { false, false, false }
+                _ => new[] { false, false, false }
             };
         }
 
@@ -76,9 +72,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             for (int i = 0; i < 3; i++)
             {
                 if (!from[i] && to[i])
-                    cost += (i == 2) ? 0.5 : 1.75; // Dash: 0.75, Direction: 1.0
+                    cost += (i == 2) ? 0.5 : 1.5;
                 else if (from[i] && !to[i])
-                    cost += (i == 2) ? 0.1 : 0.4;
+                    cost += (i == 2) ? 0.1 : 0.3;
             }
 
             return cost;

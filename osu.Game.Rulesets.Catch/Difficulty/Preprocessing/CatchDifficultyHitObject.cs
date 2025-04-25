@@ -1,14 +1,3 @@
-using System.Data;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Reflection.Metadata;
-using System.Security.AccessControl;
-using System.Net.Http.Headers;
-using System.ComponentModel;
-using System.Reflection;
-using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Text.RegularExpressions;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -24,17 +13,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
     public enum JumpType
     {
-        HyperDashToLeft = -5,
-        EdgeDashToLeft = -4,
-        DashToLeft = -3,
-        MidDashToLeft = -2,
-        WalkToLeft = -1,
         Standstill = 0,
-        WalkToRight = 1,
-        MidDashToRight = 2,
-        DashToRight = 3,
-        EdgeDashToRight = 4,
-        HyperDashToRight = 5
+        Walk = 1,
+        Dash = 2
     }
 
     public class CatchDifficultyHitObject : DifficultyHitObject
@@ -47,16 +28,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         private const float normalized_hitobject_radius = 41.0f;
 
         public readonly double DistanceMoved;
-        public readonly double PlayerMoved;
-        public readonly double StrainTime;
+        public readonly double StrainTime; // capped at 25ms
         public readonly JumpType jumpType;
-
-        public readonly List<JumpType> JumpTypes;
-        public readonly JumpType ResolvedJumpType;
-
+        public readonly List<JumpType> JumpTypeCandidates;
         public readonly double CatcherSpeed;
-        public readonly bool IsHyper;
-        public readonly double EdgeRatio;
+        public readonly double Inertia; // from hyperdash speed
+        public readonly int BuzzCount;
+
+        public readonly float HalfCatcherWidth;
 
         public readonly Flow Flow;
 
@@ -68,26 +47,23 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             NormalizedPosition = BaseObject.EffectiveX * scalingFactor;
             LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
+            HalfCatcherWidth = halfCatcherWidth;
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
-
-            PlayerMoved = DistanceMoved - (getExpectableInertia(clockRate) * halfCatcherWidth / 2);
+            Inertia = getExpectableInertia(clockRate);
+            BuzzCount = CountBuzzCluster(HalfCatcherWidth);
             StrainTime = Math.Max(25, DeltaTime);
-            EdgeRatio = Math.Max(0, (PlayerMoved - halfCatcherWidth) / StrainTime);
             CatcherSpeed = clockRate * getHyperDashSpeed(this);
-            IsHyper = LastObject.HyperDash;
-            JumpTypes = getJumpTypeCandidates(PlayerMoved, halfCatcherWidth, EdgeRatio);
-            ResolvedJumpType = resolveJumpType(JumpTypes, base.Previous(0) as CatchDifficultyHitObject);
-            jumpType = ResolvedJumpType;
+            JumpTypeCandidates = Jump.GetCandidates(DistanceMoved, halfCatcherWidth, StrainTime);
+            jumpType = Jump.Resolve(JumpTypeCandidates, (base.Previous(0) as CatchDifficultyHitObject)?.JumpTypeCandidates);
             Flow = new Flow(this, halfCatcherWidth);
         }
 
         private double getExpectableInertia(double clockRate)
         {
             var prev = base.Previous(0);
-            if (prev is CatchDifficultyHitObject p && p.IsHyper)
+            if (prev is CatchDifficultyHitObject p && p.LastObject.HyperDash)
             {
-                double inertia = Math.Clamp(Math.Sqrt(getHyperDashSpeed(p) * clockRate), 1, 2) - 1;
-                return Math.Sign(p.PlayerMoved) * inertia;
+                return Math.Clamp(getHyperDashSpeed(p) * clockRate, 1, 2.5) - 1;
             }
 
             return 0;
@@ -104,80 +80,31 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return Math.Max(1, dx / dt);
         }
 
-        private List<JumpType> getJumpTypeCandidates(double PlayerMoved, float halfCatcherSize, double edgeRatio)
+        public int CountBuzzCluster(float halfCatcherWidth)
         {
-            List<JumpType> result = new();
-            double absMove = Math.Abs(PlayerMoved);
-            int direction = Math.Sign(PlayerMoved);
+            var positions = new List<float> { this.BaseObject.EffectiveX };
 
-            // 1. StandStill condition
-            if (absMove <= halfCatcherSize * 2)
-                result.Add(JumpType.Standstill);
+            var current = this;
+            int count = 0;
 
-            // 2. Walk condition
-            if (absMove >= StrainTime * 0.5 - halfCatcherSize*2 &&
-                absMove <= StrainTime * 0.5 + halfCatcherSize*2)
-                result.Add((JumpType)(1 * direction));
-
-            // 3. Dash condition
-            if (absMove >= StrainTime - halfCatcherSize*1.8 - 7)
-                result.Add((JumpType)(3 * direction));
-
-            // 4. MidDash condition
-            if (absMove > StrainTime * 0.5 + halfCatcherSize*2 &&
-                absMove < StrainTime - halfCatcherSize*1.8)
-                result.Add((JumpType)(2 * direction));
-
-            // 5. EdgeDash condition
-            if (!LastObject.HyperDash && absMove > StrainTime - halfCatcherSize - 7)
-                result.Add((JumpType)(4 * direction));
-
-            // 6. HyperDash condition
-            if (LastObject.HyperDash)
-                result.Add((JumpType)(5 * direction));
-
-            return result.Distinct().ToList();
-        }
-
-        private JumpType resolveJumpType(List<JumpType> current, CatchDifficultyHitObject? prev)
-        {
-            if (current == null || current.Count == 0)
+            while (true)
             {
-                return JumpType.Standstill;
+                var prev = current.Previous(0) as CatchDifficultyHitObject;
+                if (prev == null)
+                    break;
+
+                positions.Add(prev.BaseObject.EffectiveX);
+
+                float min = positions.Min();
+                float max = positions.Max();
+                if (max - min > halfCatcherWidth * 2)
+                    break;
+
+                count++;
+                current = prev;
             }
 
-            List<JumpType> previous = prev?.JumpTypes ?? new List<JumpType>();
-
-            //check continuous
-            var shared = previous.Intersect(current).ToList();
-            if (shared.Count > 0)
-                return shared.First();
-
-            //check similarity
-            if (previous.Count > 0)
-            {
-                int prevValue = (int)previous.First();
-                return current.OrderBy(j => Math.Abs((int)j - prevValue)).First();
-            }
-
-            //none of above case
-            var priority = new List<JumpType>
-            {
-                JumpType.HyperDashToLeft, JumpType.HyperDashToRight,
-                JumpType.EdgeDashToLeft, JumpType.EdgeDashToRight,
-                JumpType.DashToLeft, JumpType.DashToRight,
-                JumpType.MidDashToLeft, JumpType.MidDashToRight,
-                JumpType.WalkToLeft, JumpType.WalkToRight,
-                JumpType.Standstill
-            };
-
-            foreach (var p in priority)
-            {
-                if (current.Contains(p))
-                    return p;
-            }
-
-            return current.First();
+            return count;
         }
     }
 }
