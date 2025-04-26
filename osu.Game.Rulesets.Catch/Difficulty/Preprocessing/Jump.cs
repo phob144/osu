@@ -15,7 +15,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             List<JumpType> result = new();
 
             // 1. StandStill condition
-            if (distanceMoved <= halfCatcherWidth * 2)
+            if (Math.Abs(distanceMoved) <= halfCatcherWidth * 2)
                 result.Add(JumpType.Standstill);
 
             // 2. WalkToLeft condition

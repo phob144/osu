@@ -37,11 +37,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
             //normalize hyperdash to normal dash
             double AdjustedDistance = obj.LastObject.HyperDash
-                ? obj.StrainTime * (0.6 + 0.2 * Math.Clamp(2 - 1 / Math.Pow( Math.Max(Math.Abs(obj.DistanceMoved),1) / Math.Clamp(obj.StrainTime,25,1500), 0.6 ),0,2))
+                ? obj.StrainTime * (0.6 + 0.2 * Math.Clamp(2 - 1 / Math.Sqrt( Math.Max(Math.Abs(obj.DistanceMoved),1) / Math.Clamp(obj.StrainTime,25,1500) ),0,2))
                 : Math.Abs(obj.DistanceMoved);
 
             //base precision from each distance
-            double baseRatio = (AdjustedDistance + 10*inertiaCase/inertiaPressure) / Math.Max(obj.StrainTime - 5.0, 25);
+            double baseRatio = (AdjustedDistance + 7.5*inertiaCase/inertiaPressure) / Math.Max(obj.StrainTime - 25.0/3.0, 20);
             precisionBonus *= baseRatio > 1 ? Math.Pow(baseRatio, 2) : Math.Pow(baseRatio, 1.25);
 
             //bonus from hyperwiggle
@@ -93,7 +93,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 precisionBonus *= 0.2;
 
             // CS bonus
-            precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.45);
+            precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.4);
 
             if(!flow.isValid)
                 return Math.Max(precisionBonus/480,0.00001);
@@ -107,7 +107,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double cv = avg > 0 ? Math.Pow(std / avg, 1.3) : 0;
             precisionBonus += Math.Pow(1 + cv, 0.7)/400;
 
-            // TODO : if f0 is hdash, f2 and f3 are all wiggle (f2 is ok to be walk), give bonus this is actual antiflow in stremas.
+            // TODO : if f0 is hdash or big (whatever disturbs next precision),and f2 and f3 are all wiggle (f2 is ok to be walk), give bonus this is actual antiflow in stremas.
 
             return Math.Max(precisionBonus/480, 0.00001);
         }
