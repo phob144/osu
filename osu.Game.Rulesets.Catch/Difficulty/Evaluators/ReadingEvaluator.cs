@@ -19,11 +19,16 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         public static double EvaluateDifficultyOf(DifficultyHitObject current)
         {
-            var obj = current as CatchDifficultyHitObject;
+            var obj = (CatchDifficultyHitObject)current;
             var flow = obj.Flow;
 
             // base value from distance of the jump
-            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 1.0/512.0),0.6);
+            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 1.0/512.0),0.65);
+
+            if(!flow.isValid)
+                return Math.Max(readingBonus/25,0.00001);
+
+            // checks bonus from flow below
 
             // bonus from totaldistance/totalstraintime value for reading strain
             double ratio = flow.DistanceMovedOfFlow.Select(Math.Abs).Sum() / Math.Max(flow.StrainTimeOfFlow.Sum(), 25);
@@ -31,19 +36,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 ? ratio * ratio
                 : 2 - (1 / Math.Sqrt(ratio));
 
-            // bonus from inconsistent distance (CV-based)
-            double[] movementDistances = flow.DistanceMovedOfFlow.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).Select(Math.Abs).ToArray();
-            double average = movementDistances.Average();
-            double std = Math.Sqrt(movementDistances.Select(v => Math.Pow(v - average, 2)).Average());
-            double cv = average > 0 ? std / average : 0;
-            double irregularityWeight = Math.Pow(1 + cv, 0.5);
+            readingBonus += movementWeight/16;
 
-            // Final score: product of all weights
-            readingBonus *= (1+movementWeight) * irregularityWeight / 25;
+            //TODO : time to actually put bonus on SUDDEN flows
 
-            return Math.Max(readingBonus,0.00001);
-            
-            //TODO : inconsistent distance needs make hdash normalized dash
+            return Math.Max(readingBonus/25,0.00001);
         }
     }
 }

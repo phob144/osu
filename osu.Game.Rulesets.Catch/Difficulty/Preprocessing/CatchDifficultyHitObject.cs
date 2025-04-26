@@ -13,9 +13,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 {
     public enum JumpType
     {
-        Standstill = 0,
-        Walk = 1,
-        Dash = 2
+        DashLeft = -2,
+        WalkLeft = -1,
+        Standstill = 0,    
+        WalkRight = 1,
+        DashRight = 2,
     }
 
     public class CatchDifficultyHitObject : DifficultyHitObject
@@ -29,8 +31,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
         public readonly double DistanceMoved;
         public readonly double StrainTime; // capped at 25ms
-        public readonly JumpType jumpType;
-        public readonly List<JumpType> JumpTypeCandidates;
+
+        public JumpType ModifiedJumpType;
+        public JumpType ExactJumpType;
+        public List<JumpType> JumpTypeCandidates;
+        public int DiscrepancyCount;
         public readonly double CatcherSpeed;
         public readonly double Inertia; // from hyperdash speed
         public readonly int BuzzCount;
@@ -48,22 +53,23 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
             HalfCatcherWidth = halfCatcherWidth;
-            DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
-            Inertia = getExpectableInertia(clockRate);
-            BuzzCount = CountBuzzCluster(HalfCatcherWidth);
             StrainTime = Math.Max(25, DeltaTime);
-            CatcherSpeed = clockRate * getHyperDashSpeed(this);
-            JumpTypeCandidates = Jump.GetCandidates(DistanceMoved, halfCatcherWidth, StrainTime);
-            jumpType = Jump.Resolve(JumpTypeCandidates, (base.Previous(0) as CatchDifficultyHitObject)?.JumpTypeCandidates);
+            DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
+            Inertia = getExpectableInertia();
+            BuzzCount = CountBuzzCluster(HalfCatcherWidth);
+            DistanceMoved *= Math.Max((1-(Math.Clamp(BuzzCount-1,0,4) / 4)),0.001);
+            CatcherSpeed = getHyperDashSpeed(this);
+            determineJumpType();
+
             Flow = new Flow(this, halfCatcherWidth);
         }
 
-        private double getExpectableInertia(double clockRate)
+        private double getExpectableInertia()
         {
             var prev = base.Previous(0);
             if (prev is CatchDifficultyHitObject p && p.LastObject.HyperDash)
             {
-                return Math.Clamp(getHyperDashSpeed(p) * clockRate, 1, 2.5) - 1;
+                return Math.Clamp(getHyperDashSpeed(p), 1, 2.5);
             }
 
             return 0;
@@ -105,6 +111,24 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             }
 
             return count;
+        }
+
+        private void determineJumpType() // players can choose different option from previous flow up to 1 time
+        {
+            JumpTypeCandidates = Jump.GetCandidates(DistanceMoved, HalfCatcherWidth, StrainTime);
+            ExactJumpType = Jump.GetExactJumpType(DistanceMoved, HalfCatcherWidth, StrainTime); // best option regardless previous flow
+            ModifiedJumpType = Jump.Resolve(JumpTypeCandidates, (base.Previous(0) as CatchDifficultyHitObject)?.ModifiedJumpType); // modified option from previous flow
+
+            var prev = base.Previous(0) as CatchDifficultyHitObject;
+
+            if (ModifiedJumpType != ExactJumpType)
+                DiscrepancyCount = 1;
+
+            if (prev?.DiscrepancyCount == 1 && DiscrepancyCount == 1)
+            {
+                ModifiedJumpType = ExactJumpType;
+                DiscrepancyCount = 0;
+            }
         }
     }
 }

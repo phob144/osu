@@ -19,6 +19,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var flow = obj.Flow;
             var HalfCatcherWidth = halfCatcherWidth;
 
+            if (!flow.isValid)
+                return 0.00001;
+
             var f0 = (int)flow.FlowTypes[0];
             var f1 = (int)flow.FlowTypes[1];
             var f2 = (int)flow.FlowTypes[2];
@@ -33,23 +36,21 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
             // Curved flow penalty
             if (f0 * f2 < 0)
-                keyDifficulty -= 0.5;
+                keyDifficulty -= 1;
 
             // Tapdash/Standstillable bonus
             if (f0 == f2 && Math.Abs(f0) == 2)
             {
-                keyDifficulty += 0.25 * Math.Abs(f1 - f0);
+                keyDifficulty += 0.35 * Math.Abs(f1 - f0);
             }
 
             double adjustedTotalStrain = Math.Max(flow.StrainTimeOfFlow.Sum(), 75);
-            double powValue = adjustedTotalStrain >= 220 ? 1.5 : 1.05;
+            double powValue = adjustedTotalStrain >= 250 ? 1.3 : 1.5;
 
-            double speedBonus = 1 / (Math.Pow(adjustedTotalStrain / 220, powValue) * 135);
-            speedBonus *= Math.Pow(keyDifficulty,1.25) * Math.Max(1 - 1.0/6.0 * Math.Min(obj.BuzzCount,6), 0.001);
+            double speedBonus = 1 / (Math.Pow(adjustedTotalStrain / 250, powValue) * 150);
+            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001);
 
             return Math.Max(speedBonus, 0.00001);
-
-            // TODO : need to test more but it checks 280 stream flow as like 210wiggleish (actually if flow change happens in 75% rate it's true but need to look how it detects) 
         }
 
         private static bool[] GetKeyState(int flowType)
@@ -72,9 +73,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             for (int i = 0; i < 3; i++)
             {
                 if (!from[i] && to[i])
-                    cost += (i == 2) ? 0.5 : 1.5;
+                    cost += (i == 2) ? 0.3 : 1.5;
                 else if (from[i] && !to[i])
-                    cost += (i == 2) ? 0.1 : 0.3;
+                    cost += (i == 2) ? 0.1 : 0.5;
             }
 
             return cost;
