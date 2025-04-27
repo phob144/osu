@@ -30,14 +30,13 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         private const float normalized_hitobject_radius = 41.0f;
 
         public readonly double DistanceMoved;
-        public readonly double StrainTime; // capped at 25ms
+        public readonly double StrainTime; // capped at 20ms
 
         public JumpType ModifiedJumpType;
         public JumpType ExactJumpType;
         public List<JumpType> JumpTypeCandidates;
         public int DiscrepancyCount;
         public readonly double CatcherSpeed;
-        public readonly double Inertia; // from hyperdash speed
         public readonly int BuzzCount;
 
         public readonly float HalfCatcherWidth;
@@ -53,26 +52,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             LastNormalizedPosition = LastObject.EffectiveX * scalingFactor;
 
             HalfCatcherWidth = halfCatcherWidth;
-            StrainTime = Math.Max(25, DeltaTime);
+            StrainTime = Math.Max(20, DeltaTime);
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
-            Inertia = getExpectableInertia();
             BuzzCount = CountBuzzCluster(HalfCatcherWidth);
             DistanceMoved *= Math.Max((1-(Math.Clamp(BuzzCount-1,0,4) / 4)),0.001);
             CatcherSpeed = getHyperDashSpeed(this);
             determineJumpType();
 
             Flow = new Flow(this, halfCatcherWidth);
-        }
-
-        private double getExpectableInertia()
-        {
-            var prev = base.Previous(0);
-            if (prev is CatchDifficultyHitObject p && p.LastObject.HyperDash)
-            {
-                return Math.Clamp(getHyperDashSpeed(p), 1, 2.5);
-            }
-
-            return 0;
         }
 
         private double getHyperDashSpeed(CatchDifficultyHitObject current)
@@ -118,13 +105,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             JumpTypeCandidates = Jump.GetCandidates(DistanceMoved, HalfCatcherWidth, StrainTime);
             ExactJumpType = Jump.GetExactJumpType(DistanceMoved, HalfCatcherWidth, StrainTime); // best option regardless previous flow
             ModifiedJumpType = Jump.Resolve(JumpTypeCandidates, (base.Previous(0) as CatchDifficultyHitObject)?.ModifiedJumpType); // modified option from previous flow
+            DiscrepancyCount = 0;
 
             var prev = base.Previous(0) as CatchDifficultyHitObject;
 
-            if (ModifiedJumpType != ExactJumpType)
-                DiscrepancyCount = 1;
+            if (prev!= null && ModifiedJumpType != ExactJumpType)
+                DiscrepancyCount = 1 + prev.DiscrepancyCount;
 
-            if (prev?.DiscrepancyCount == 1 && DiscrepancyCount == 1)
+            if (prev?.DiscrepancyCount == 3)
             {
                 ModifiedJumpType = ExactJumpType;
                 DiscrepancyCount = 0;

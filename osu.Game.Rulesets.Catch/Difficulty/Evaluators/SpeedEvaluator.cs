@@ -18,6 +18,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var obj = (CatchDifficultyHitObject)current;
             var flow = obj.Flow;
             var HalfCatcherWidth = halfCatcherWidth;
+            bool checkTwoFlow = false;
 
             if (!flow.isValid)
                 return 0.00001;
@@ -41,16 +42,25 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             // Tapdash/Standstillable bonus
             if (f0 == f2 && Math.Abs(f0) == 2)
             {
-                keyDifficulty += 0.35 * Math.Abs(f1 - f0);
+                keyDifficulty += 0.2 * Math.Pow(Math.Abs(f1 - f0),2);
+                if(Math.Abs(f1-f0)>2)
+                    checkTwoFlow = true;
+
             }
 
-            double adjustedTotalStrain = Math.Max(flow.StrainTimeOfFlow.Sum(), 75);
-            double powValue = adjustedTotalStrain >= 250 ? 1.3 : 1.5;
+            double[] strainTimes = flow.StrainTimeOfFlow;
 
-            double speedBonus = 1 / (Math.Pow(adjustedTotalStrain / 250, powValue) * 150);
-            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001);
+            double sum12 = strainTimes[0] + strainTimes[1];
+            double sum23 = strainTimes[1] + strainTimes[2];
+            double smallerSum = Math.Min(sum12, sum23);
 
-            return Math.Max(speedBonus, 0.00001);
+            double adjustedTotalStrain = Math.Max(checkTwoFlow ? smallerSum : flow.StrainTimeOfFlow.Sum()*2.0/3.0, 50);
+            double powValue = adjustedTotalStrain >= 135 ? 2.25 : 1.7;
+
+            double speedBonus = 1 / Math.Pow(adjustedTotalStrain / 135, powValue);
+            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001) / 350;
+
+            return Math.Clamp(speedBonus, 0.00001,0.03); //temporary making max cap because no one can wiggle 600bpm in this generation
         }
 
         private static bool[] GetKeyState(int flowType)
@@ -73,9 +83,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             for (int i = 0; i < 3; i++)
             {
                 if (!from[i] && to[i])
-                    cost += (i == 2) ? 0.3 : 1.5;
+                    cost += (i == 2) ? 0.4 : 1.2;
                 else if (from[i] && !to[i])
-                    cost += (i == 2) ? 0.1 : 0.5;
+                    cost += (i == 2) ? 0.1 : 0.4;
             }
 
             return cost;

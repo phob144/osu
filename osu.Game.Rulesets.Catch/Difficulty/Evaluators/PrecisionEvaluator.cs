@@ -23,26 +23,42 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var flow = obj.Flow;
             var HalfCatcherWidth = halfCatcherWidth;
 
-            double precisionBonus = clockRate;
+            double precisionBonus = Math.Sqrt(clockRate);
 
-            // Base precision: movement difficulty with inertia
+            // inertia from hyperdash
             var prev = obj.Previous(0) as CatchDifficultyHitObject;
             double inertiaCase = 0;
-            double inertiaPressure = 1500;
             if (prev != null){
-                inertiaPressure = Math.Pow(prev.StrainTime,0.75);
                 if(Math.Sign(prev.DistanceMoved) != Math.Sign(obj.DistanceMoved))
-                    inertiaCase = Math.Abs(obj.Inertia);
+                    inertiaCase = 3;
+                    if (prev.LastObject.HyperDash)
+                        inertiaCase *= 1.5 * Math.Min(prev.CatcherSpeed,15);
+                else{
+                    inertiaCase = -3;
+                    if (prev.LastObject.HyperDash)
+                        inertiaCase = 0;
+                }
             }
 
             //normalize hyperdash to normal dash
             double AdjustedDistance = obj.LastObject.HyperDash
-                ? obj.StrainTime * (0.6 + 0.2 * Math.Clamp(2 - 1 / Math.Sqrt( Math.Max(Math.Abs(obj.DistanceMoved),1) / Math.Clamp(obj.StrainTime,25,1500) ),0,2))
+                ? obj.StrainTime * (0.3 + 0.3 * Math.Clamp(2 - 1 / Math.Max(Math.Abs(obj.DistanceMoved),1) / Math.Clamp(obj.StrainTime,20,1500),0,2))
                 : Math.Abs(obj.DistanceMoved);
 
             //base precision from each distance
-            double baseRatio = (AdjustedDistance + 7.5*inertiaCase/inertiaPressure) / Math.Max(obj.StrainTime - 25.0/3.0, 20);
-            precisionBonus *= baseRatio > 1 ? Math.Pow(baseRatio, 2) : Math.Pow(baseRatio, 1.25);
+            double baseRatio = Math.Max((AdjustedDistance + 4*inertiaCase),1) / Math.Max(obj.StrainTime - 3.0, 25);
+            baseRatio = AdjustedDistance < halfCatcherWidth*1.5 ? AdjustedDistance/(halfCatcherWidth*1.5)*baseRatio : Math.Pow(baseRatio,CircleSize/10) * (obj.LastObject.HyperDash? 1 : Math.Pow(1.075, Math.Clamp(100/obj.StrainTime,1,4)-1)); // if the distance is smaller than 0.75x of catcher, reduce. if larger, plate size is more used to hit the jump
+            precisionBonus *= baseRatio > 1 ? Math.Pow(baseRatio, 2) : Math.Pow(baseRatio, 1.5);
+
+            //check how sudden the edgedash is in edgedash case
+            if (precisionBonus>=1){
+                if(prev!=null){
+                    if(Math.Sign(prev.DistanceMoved) != Math.Sign(obj.DistanceMoved) && prev.LastObject.HyperDash && !obj.LastObject.HyperDash)
+                        precisionBonus *= Math.Max(obj.DistanceMoved/prev.StrainTime,prev.StrainTime/obj.StrainTime); // antiflow after fast hyperdash or fast antiflow after hyperdash
+                    if(Math.Abs(prev.DistanceMoved)*2 < Math.Abs(obj.DistanceMoved) && !obj.LastObject.HyperDash)
+                        precisionBonus *= 1.5; // edgedash without suggestion
+                }
+            }
 
             //bonus from hyperwiggle
             int hyperWiggleBonus = 0;
@@ -59,7 +75,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 target = step;
             }
 
-            precisionBonus *= Math.Pow(1.075,Math.Min(hyperWiggleBonus,8));
+            precisionBonus *= Math.Pow(Math.Pow(1.01,Math.Pow(Math.Min(obj.CatcherSpeed,10),0.6)),Math.Min(hyperWiggleBonus,6));
 
             // MidDash bonus with streak multiplier and CS
             double movementRatio = Math.Abs(obj.DistanceMoved) / Math.Max(obj.StrainTime, 1);
@@ -84,8 +100,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     currentObj = previous;
                 }
 
-                double streakMultiplier = Math.Pow(1.1, (streak-1));
-                precisionBonus *= Math.Pow(streakMultiplier,midDashBase) * Math.Pow(Math.Max((CircleSize-3.9),0.1),0.3);
+                double streakMultiplier = Math.Pow(1.1, Math.Max((streak-1),0));
+                precisionBonus *= Math.Pow(streakMultiplier,midDashBase) * Math.Pow(Math.Max((CircleSize-3.9),1),0.3);
             }
 
             //reduce bonus if it's on same direction and not middash
@@ -93,23 +109,42 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 precisionBonus *= 0.2;
 
             // CS bonus
-            precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.4);
+            precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.1);
 
             if(!flow.isValid)
-                return Math.Max(precisionBonus/480,0.00001);
+                return Math.Clamp(precisionBonus/850,0.00001,0.03);
 
-            // checks bonus from flow below
+            // bonus calc with flow starts below
 
             // Irregular rhythm bonus
             double[] strainTimes = flow.StrainTimeOfFlow;
             double avg = strainTimes.Average();
             double std = Math.Sqrt(strainTimes.Select(s => Math.Pow(s - avg, 2)).Average());
-            double cv = avg > 0 ? Math.Pow(std / avg, 1.3) : 0;
-            precisionBonus += Math.Pow(1 + cv, 0.7)/400;
+            double cv = avg > 0 ? std / avg : 0;
 
-            // TODO : if f0 is hdash or big (whatever disturbs next precision),and f2 and f3 are all wiggle (f2 is ok to be walk), give bonus this is actual antiflow in stremas.
+            int sign(int value) => value == 0 ? 0 : (value > 0 ? 1 : -1);
 
-            return Math.Max(precisionBonus/480, 0.00001);
+            int sign0 = sign((int)flow.FlowTypes[0]);
+            int sign1 = sign((int)flow.FlowTypes[1]);
+            int sign2 = sign((int)flow.FlowTypes[2]);
+
+            double bonusMultiplier;
+
+            if (sign0 != sign1 || sign1 != sign2)
+            {
+                bonusMultiplier = 0.8;
+
+                if (sign0 == sign2 && sign0 != 0)
+                    bonusMultiplier = 1.5;
+            }
+            else
+            {
+                bonusMultiplier = 0.1;
+            }
+
+            precisionBonus += Math.Pow(cv,1.75) * bonusMultiplier / Math.Max(flow.StrainTimeOfFlow[0],20) * 360;
+
+            return Math.Clamp(precisionBonus/850, 0.00001,0.03);
         }
     }
 }

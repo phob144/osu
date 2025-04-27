@@ -34,7 +34,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
 
         private double HalfCatcherWidth;
         
-        public bool isValid; //checks if this is where to start new flow, used in speedeval
+        public bool isValid; //checks if this is where to start new flow, used in skill evals formulas which use flow
 
         public Flow(CatchDifficultyHitObject start, double halfCatcherWidth)
         {

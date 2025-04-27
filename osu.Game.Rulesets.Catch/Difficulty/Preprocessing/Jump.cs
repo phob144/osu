@@ -94,7 +94,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             double absMove = Math.Abs(distanceMoved);
 
             // 1. Standstill condition
-            if (absMove <= halfCatcherWidth * 1.5)
+            if (absMove <= halfCatcherWidth)
                 return JumpType.Standstill;
 
             // 2. Walk condition

@@ -1,3 +1,4 @@
+using System.Security.AccessControl;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -43,16 +44,19 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             int numTotalHits = totalComboHits();
 
             double lengthBonus =
-                0.95 + 0.3 * Math.Min(1.0, numTotalHits / 2500.0) +
-                (numTotalHits > 2500 ? Math.Log10(numTotalHits / 2500.0) * 0.475 : 0.0);
+                0.95 + 0.3 * Math.Min(1.0, numTotalHits / 2000.0) +
+                (numTotalHits > 2000 ? Math.Log10(numTotalHits / 2000.0) * 0.35 : 0.0);
             value *= lengthBonus;
 
-            value *= Math.Pow(0.97, numMiss);
+            value *= Math.Pow(0.7, 50*Math.Pow((double)numMiss,1.5)/(double)numTotalHits);
+            if (numMiss>0)
+                value *=0.925; // give more value on FC
 
-            // Combo scaling
-            if (catchAttributes.MaxCombo > 0)
-                value *= Math.Min(Math.Pow(score.MaxCombo, 0.8) / Math.Pow(catchAttributes.MaxCombo, 0.8), 1.0);
-
+            // Combo scaling with reduction
+            if (catchAttributes.MaxCombo > 0){
+                double comboRatio = ((double)score.MaxCombo/(double)catchAttributes.MaxCombo) *100;
+                value *= Math.Min(100.5/(1+Math.Pow(3,(-0.125)*(comboRatio-40))),100)/100;
+            }
             var difficulty = score.BeatmapInfo!.Difficulty.Clone();
 
             score.Mods.OfType<IApplicableToDifficulty>().ForEach(m => m.ApplyToDifficulty(difficulty));
@@ -67,12 +71,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             double approachRate = preempt > 1200.0 ? -(preempt - 1800.0) / 120.0 : -(preempt - 1200.0) / 150.0 + 5.0;
 
             double approachRateFactor = 1.0;
-            if (approachRate > 9.0)
-                approachRateFactor += 0.1 * (approachRate - 9.0); // 10% for each AR above 9
-            if (approachRate > 10.0)
-                approachRateFactor += 0.1 * (approachRate - 10.0); // Additional 10% at AR 11, 30% total
-            else if (approachRate < 8.0)
-                approachRateFactor += 0.025 * (8.0 - approachRate); // 2.5% for each AR below 8
+            double commonApproachRate = catchAttributes.StarRating > 8 ? 10 : (catchAttributes.StarRating > 4 ? 6 + catchAttributes.StarRating * 0.5 : 5 + catchAttributes.StarRating * 0.75);
+            approachRateFactor += 0.1 * Math.Max(approachRate-commonApproachRate,0); // give 10% bonus of positive difference from common approach rate of star rating. slower AR should not be considered because of lanecover skin
 
             value *= approachRateFactor;
 
@@ -80,15 +80,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             {
                 // Hiddens gives almost nothing on max approach rate, and more the lower it is
                 if (approachRate <= 10.0)
-                    value *= 1.05 + 0.075 * (10.0 - approachRate); // 7.5% for each AR below 10
+                    value *= 1.05 + 0.1 * (10.0 - approachRate); // 10% for each AR below 10
                 else if (approachRate > 10.0)
                     value *= 1.01 + 0.04 * (11.0 - Math.Min(11.0, approachRate)); // 5% at AR 10, 1% at AR 11
             }
 
             if (score.Mods.Any(m => m is ModFlashlight))
-                value *= 1.35 * lengthBonus;
+                value *= Math.Pow(1.3, approachRate / 6) * lengthBonus; // flashlight gets harder on faster AR
 
-            value *= Math.Pow(accuracy(), 5.5);
+            value *= Math.Pow(accuracy(), 10.0);
 
             if (score.Mods.Any(m => m is ModNoFail))
                 value *= Math.Max(0.90, 1.0 - 0.02 * numMiss);

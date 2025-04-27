@@ -23,24 +23,43 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var flow = obj.Flow;
 
             // base value from distance of the jump
-            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 1.0/512.0),0.65);
+            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 1.0/512.0),1.2);
 
             if(!flow.isValid)
-                return Math.Max(readingBonus/25,0.00001);
+                return Math.Max(readingBonus/60,0.00001);
 
             // checks bonus from flow below
 
+
+            // give penalty if every flow is formed with 1 note
+            int totalObjects = flow.HitObjectsOfFlow.Sum(group => group?.Length ?? 0);
+            readingBonus *= Math.Min(Math.Min(totalObjects,3)*0.1 + 0.4, 1.1); 
+
             // bonus from totaldistance/totalstraintime value for reading strain
-            double ratio = flow.DistanceMovedOfFlow.Select(Math.Abs).Sum() / Math.Max(flow.StrainTimeOfFlow.Sum(), 25);
+            double ratio = Math.Pow(flow.DistanceMovedOfFlow.Select(Math.Abs).Sum(),1.2) / Math.Max(flow.StrainTimeOfFlow.Sum(), 20);
             double movementWeight = ratio <= 1
                 ? ratio * ratio
-                : 2 - (1 / Math.Sqrt(ratio));
+                : ratio;
 
-            readingBonus += movementWeight/16;
+            readingBonus += movementWeight/75;
 
-            //TODO : time to actually put bonus on SUDDEN flows
+            // bonus from how sudden and quick the new jump requires dash
+            if (Math.Abs((int)flow.FlowTypes[1]) == 2)
+            {
+                var currentStrainTime = Math.Max(flow.StrainTimeOfFlow[1], 1);
+                var previousStrainTime = Math.Max(flow.StrainTimeOfFlow[0], 1);
 
-            return Math.Max(readingBonus/25,0.00001);
+                if (flow.FlowTypes[0] == FlowType.StandStill || Math.Sign((int)flow.FlowTypes[0]) == 1)
+                {
+                    double suddenRatio = Math.Min(previousStrainTime / currentStrainTime,3);
+                    if ( Math.Abs((int)flow.FlowTypes[2]) == 2 && flow.FlowTypes[1] != flow.FlowTypes[2] )
+                        suddenRatio *=1.5;
+                    double suddenBonus = Math.Max(1.0, suddenRatio) / (Math.Pow(currentStrainTime/27,1.7) * 2.5);
+                    readingBonus += suddenBonus;
+                }
+            }
+
+            return Math.Max(readingBonus/50,0.00001);
         }
     }
 }
