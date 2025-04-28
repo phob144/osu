@@ -16,9 +16,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 {
     public class Speed : StrainDecaySkill
     {
-        protected override double SkillMultiplier => 0.5;
-        protected override double StrainDecayBase => 0.8;
-        protected override int SectionLength => 750;
+        protected override double SkillMultiplier => 0.8;
+        protected override double StrainDecayBase => 0.5;
+        protected override int SectionLength => 1500;
 
         protected readonly float HalfCatcherWidth;
         private readonly double clockRate;

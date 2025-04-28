@@ -10,17 +10,17 @@ namespace osu.Game.Rulesets.Catch.Difficulty
     public class CatchDifficultyAttributes : DifficultyAttributes
     {
         /// <summary>
-        /// The difficulty value corresponding to precision.
+        /// The difficulty value corresponding to precision
         /// </summary>
         public double PrecisionDifficulty { get; set; }
 
         /// <summary>
-        /// The difficulty value corresponding to reading.
+        /// The difficulty value corresponding to reading
         /// </summary>
         public double ReadingDifficulty { get; set; }
 
         /// <summary>
-        /// The difficulty value corresponding to speed.
+        /// The difficulty value corresponding to speed
         /// </summary>
         public double SpeedDifficulty { get; set; }
 

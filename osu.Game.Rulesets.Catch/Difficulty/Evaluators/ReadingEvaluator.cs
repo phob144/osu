@@ -23,25 +23,21 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var flow = obj.Flow;
 
             // base value from distance of the jump
-            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 0.1/512.0),2);
+            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 1024, 0.1/1024.0),2.5);
 
             if(!flow.isValid)
-                return Math.Max(readingBonus/10,0.00001);
+                return Math.Clamp(readingBonus/10,0.00001,0.15);
 
             // checks bonus from flow below
 
-
-            // give penalty if every flow is formed with 1 note
-            int totalObjects = flow.HitObjectsOfFlow.Sum(group => group?.Length ?? 0);
-            readingBonus *= Math.Min(Math.Min(totalObjects,3)*0.1 + 0.4, 1.1); 
-
             // bonus from totaldistance/totalstraintime value for reading strain
             double ratio = Math.Pow(flow.DistanceMovedOfFlow.Select(Math.Abs).Sum(),1.2) / Math.Max(flow.StrainTimeOfFlow.Sum(), 20);
-            double movementWeight = ratio <= 1
+            double MovementWeightBonus = ratio <= 1
                 ? ratio * ratio
                 : ratio;
+            MovementWeightBonus *= 1.0/70.0;
 
-            readingBonus += movementWeight/60;
+            readingBonus += MovementWeightBonus;
 
             // bonus from how sudden and quick the new jump requires dash
             if (Math.Abs((int)flow.FlowTypes[1]) == 2)
@@ -53,13 +49,19 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 {
                     double suddenRatio = Math.Min(previousStrainTime / currentStrainTime,3);
                     if ( Math.Abs((int)flow.FlowTypes[2]) == 2 && flow.FlowTypes[1] != flow.FlowTypes[2] )
-                        suddenRatio *=1.5;
-                    double suddenBonus = Math.Max(1.0, suddenRatio) / (Math.Pow(currentStrainTime/20,1.5) * 2.5);
-                    readingBonus += suddenBonus;
+                        suddenRatio *=1.2;
+                    double SuddenBonus = Math.Max(1.0, Math.Pow(suddenRatio,0.1)) / Math.Pow(currentStrainTime/20,1.85) * 0.35;
+                    readingBonus += SuddenBonus;
                 }
             }
 
-            return Math.Max(readingBonus/10,0.00001);
+            // give penalty if every flow is formed with 1 note
+            int totalObjects = flow.HitObjectsOfFlow.Sum(group => group?.Length ?? 0);
+            double DensityAdjustment = Math.Min(Math.Min(totalObjects,3)*0.04 + 0.76, 1.12);
+
+            readingBonus *= DensityAdjustment;
+
+            return Math.Clamp(readingBonus/10,0.00001,0.15);
         }
     }
 }

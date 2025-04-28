@@ -16,9 +16,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 {
     public class Precision : StrainDecaySkill
     {
-        protected override double SkillMultiplier => 0.45;
+        protected override double SkillMultiplier => 0.32;
         protected override double StrainDecayBase => 0.5;
-        protected override int SectionLength => 750;
+        protected override int SectionLength => 1500;
 
         protected readonly float HalfCatcherWidth;
         private readonly double catcherSpeedMultiplier;

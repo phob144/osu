@@ -31,19 +31,20 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var s1 = GetKeyState(f1);
             var s2 = GetKeyState(f2);
 
-            double keyDifficulty =
+            double KeyDifficultyBonus =
                 GetTransitionCost(s0, s1) +
                 GetTransitionCost(s1, s2);
 
             // Curved flow penalty
             if (f0 * f2 < 0)
-                keyDifficulty -= 1;
+                KeyDifficultyBonus -= 1;
 
             // Tapdash/Standstillable bonus
             if (f0 == f2 && Math.Abs(f0) == 2)
             {
-                keyDifficulty += 0.2 * Math.Pow(Math.Abs(f1 - f0),2);
+                KeyDifficultyBonus += 0.1 * Math.Abs(f1 - f0);
                 if(Math.Abs(f1-f0)>2)
+                    KeyDifficultyBonus += 0.5 * Math.Abs(f1-f0);
                     checkTwoFlow = true;
 
             }
@@ -55,12 +56,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double smallerSum = Math.Min(sum12, sum23);
 
             double adjustedTotalStrain = Math.Max(checkTwoFlow ? smallerSum : flow.StrainTimeOfFlow.Sum()*2.0/3.0, 50);
-            double powValue = adjustedTotalStrain >= 135 ? 2 : 1.45;
+            double powValue = adjustedTotalStrain>150 ? 3 : 2;
+            double StrainTimeBonus = 1 / Math.Pow(adjustedTotalStrain / 150, powValue);
 
-            double speedBonus = 1 / Math.Pow(adjustedTotalStrain / 135, powValue);
-            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001);
+            double BuzzAdjustment = Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001);
 
-            return Math.Clamp(speedBonus/200, 0.00001,50); //temporary making max cap because no one can wiggle 600bpm in this generation
+            double speedBonus = KeyDifficultyBonus * StrainTimeBonus * BuzzAdjustment;
+
+            return Math.Clamp(speedBonus/210, 0.00001,0.075); //temporary making max cap for kaede case. same to reading side
         }
 
         private static bool[] GetKeyState(int flowType)
@@ -83,9 +86,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             for (int i = 0; i < 3; i++)
             {
                 if (!from[i] && to[i])
-                    cost += (i == 2) ? 0.4 : 1.2;
+                    cost += (i == 2) ? 0.1 : 1;
                 else if (from[i] && !to[i])
-                    cost += (i == 2) ? 0.1 : 0.4;
+                    cost += (i == 2) ? 0.1 : 0.3;
             }
 
             return cost;

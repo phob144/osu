@@ -102,6 +102,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
                 StrainTimeOfFlow[groupIndex] = workingStrain;
                 HitObjectsOfFlow[groupIndex] = hitObjectGroups[groupIndex].ToArray();
             }
+
+            for (int i = 0; i < StrainTimeOfFlow.Length; i++)
+            {
+                if (StrainTimeOfFlow[i] == 0)
+                    StrainTimeOfFlow[i] = 1500; // setting straintime to 1500 if it doesn't have the value (blocking it being 0)
+            }
         }
 
         // updated flow type calculation using JumpType and movement direction
