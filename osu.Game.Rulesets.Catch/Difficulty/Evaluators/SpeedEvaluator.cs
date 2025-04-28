@@ -55,12 +55,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double smallerSum = Math.Min(sum12, sum23);
 
             double adjustedTotalStrain = Math.Max(checkTwoFlow ? smallerSum : flow.StrainTimeOfFlow.Sum()*2.0/3.0, 50);
-            double powValue = adjustedTotalStrain >= 135 ? 2.25 : 1.7;
+            double powValue = adjustedTotalStrain >= 135 ? 2 : 1.45;
 
             double speedBonus = 1 / Math.Pow(adjustedTotalStrain / 135, powValue);
-            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001) / 350;
+            speedBonus *= keyDifficulty * Math.Max(1 - 1.0/6.0 * Math.Clamp(obj.BuzzCount-2,0,6), 0.001);
 
-            return Math.Clamp(speedBonus, 0.00001,0.03); //temporary making max cap because no one can wiggle 600bpm in this generation
+            return Math.Clamp(speedBonus/200, 0.00001,50); //temporary making max cap because no one can wiggle 600bpm in this generation
         }
 
         private static bool[] GetKeyState(int flowType)

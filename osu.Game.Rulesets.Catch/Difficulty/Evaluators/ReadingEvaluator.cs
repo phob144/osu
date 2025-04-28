@@ -23,10 +23,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var flow = obj.Flow;
 
             // base value from distance of the jump
-            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 1.0/512.0),1.2);
+            double readingBonus = Math.Pow(Math.Max(obj.DistanceMoved / 512, 0.1/512.0),2);
 
             if(!flow.isValid)
-                return Math.Max(readingBonus/60,0.00001);
+                return Math.Max(readingBonus/10,0.00001);
 
             // checks bonus from flow below
 
@@ -41,7 +41,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 ? ratio * ratio
                 : ratio;
 
-            readingBonus += movementWeight/75;
+            readingBonus += movementWeight/60;
 
             // bonus from how sudden and quick the new jump requires dash
             if (Math.Abs((int)flow.FlowTypes[1]) == 2)
@@ -54,12 +54,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     double suddenRatio = Math.Min(previousStrainTime / currentStrainTime,3);
                     if ( Math.Abs((int)flow.FlowTypes[2]) == 2 && flow.FlowTypes[1] != flow.FlowTypes[2] )
                         suddenRatio *=1.5;
-                    double suddenBonus = Math.Max(1.0, suddenRatio) / (Math.Pow(currentStrainTime/27,1.7) * 2.5);
+                    double suddenBonus = Math.Max(1.0, suddenRatio) / (Math.Pow(currentStrainTime/20,1.5) * 2.5);
                     readingBonus += suddenBonus;
                 }
             }
 
-            return Math.Max(readingBonus/50,0.00001);
+            return Math.Max(readingBonus/10,0.00001);
         }
     }
 }

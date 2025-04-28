@@ -44,11 +44,17 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double AdjustedDistance = obj.LastObject.HyperDash
                 ? obj.StrainTime * (0.3 + 0.3 * Math.Clamp(2 - 1 / Math.Max(Math.Abs(obj.DistanceMoved),1) / Math.Clamp(obj.StrainTime,20,1500),0,2))
                 : Math.Abs(obj.DistanceMoved);
+            AdjustedDistance = AdjustedDistance > halfCatcherWidth*1.5 ? AdjustedDistance - halfCatcherWidth*0.25 : AdjustedDistance; // players tend to use plate size in their movement to catch if the jump is larger than plate size
 
             //base precision from each distance
             double baseRatio = Math.Max((AdjustedDistance + 4*inertiaCase),1) / Math.Max(obj.StrainTime - 3.0, 25);
-            baseRatio = AdjustedDistance < halfCatcherWidth*1.5 ? AdjustedDistance/(halfCatcherWidth*1.5)*baseRatio : Math.Pow(baseRatio,CircleSize/10) * (obj.LastObject.HyperDash? 1 : Math.Pow(1.075, Math.Clamp(100/obj.StrainTime,1,4)-1)); // if the distance is smaller than 0.75x of catcher, reduce. if larger, plate size is more used to hit the jump
-            precisionBonus *= baseRatio > 1 ? Math.Pow(baseRatio, 2) : Math.Pow(baseRatio, 1.5);
+            baseRatio = AdjustedDistance < halfCatcherWidth*1.5 ? AdjustedDistance/(halfCatcherWidth*1.5)*baseRatio : baseRatio * (obj.LastObject.HyperDash? 1 : Math.Pow(1.075, Math.Clamp(100/obj.StrainTime,0,4)-1)); // if the distance is smaller than 0.75x of catcher,
+            precisionBonus *= baseRatio > 1 ? Math.Pow(baseRatio, 2) : Math.Pow(baseRatio, 2.5);
+
+            //reduce bonus if it's on same direction and not middash
+            if(prev != null && obj.ModifiedJumpType == prev.ModifiedJumpType && !isMidDash)
+                precisionBonus *= 0.2;
+            
 
             //check how sudden the edgedash is in edgedash case
             if (precisionBonus>=1){
@@ -104,19 +110,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 precisionBonus *= Math.Pow(streakMultiplier,midDashBase) * Math.Pow(Math.Max((CircleSize-3.9),1),0.3);
             }
 
-            //reduce bonus if it's on same direction and not middash
-            if(prev != null && obj.ModifiedJumpType == prev.ModifiedJumpType && !isMidDash)
-                precisionBonus *= 0.2;
-
             // CS bonus
             precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.1);
 
             if(!flow.isValid)
-                return Math.Clamp(precisionBonus/850,0.00001,0.03);
+                return Math.Max(precisionBonus/180,0.00001);
 
             // bonus calc with flow starts below
 
-            // Irregular rhythm bonus
+            // Inconsistent rhythm bonus
             double[] strainTimes = flow.StrainTimeOfFlow;
             double avg = strainTimes.Average();
             double std = Math.Sqrt(strainTimes.Select(s => Math.Pow(s - avg, 2)).Average());
@@ -142,9 +144,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 bonusMultiplier = 0.1;
             }
 
-            precisionBonus += Math.Pow(cv,1.75) * bonusMultiplier / Math.Max(flow.StrainTimeOfFlow[0],20) * 360;
+            precisionBonus += ( Math.Pow(cv,1.75) * bonusMultiplier / Math.Max(flow.StrainTimeOfFlow[0]==0? 1500 : flow.StrainTimeOfFlow[0],20) ) * 250;
 
-            return Math.Clamp(precisionBonus/850, 0.00001,0.03);
+            return Math.Max(precisionBonus/180, 0.00001);
         }
     }
 }

@@ -54,7 +54,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             HalfCatcherWidth = halfCatcherWidth;
             StrainTime = Math.Max(20, DeltaTime);
             DistanceMoved = BaseObject.EffectiveX - LastObject.EffectiveX;
-            BuzzCount = CountBuzzCluster(HalfCatcherWidth);
+            BuzzCount = countBuzzCluster(HalfCatcherWidth);
             DistanceMoved *= Math.Max((1-(Math.Clamp(BuzzCount-1,0,4) / 4)),0.001);
             CatcherSpeed = getHyperDashSpeed(this);
             determineJumpType();
@@ -73,7 +73,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
             return Math.Max(1, dx / dt);
         }
 
-        public int CountBuzzCluster(float halfCatcherWidth)
+        public int countBuzzCluster(float halfCatcherWidth)
         {
             var positions = new List<float> { this.BaseObject.EffectiveX };
 
