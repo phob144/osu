@@ -1,4 +1,3 @@
-using Microsoft.VisualBasic.CompilerServices;
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
@@ -21,7 +20,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 {
     public class CatchDifficultyCalculator : DifficultyCalculator
     {
-        private const double difficulty_multiplier = 5.05;
+        private const double difficulty_multiplier = 1.05;
 
         private float halfCatcherWidth;
 
@@ -37,25 +36,24 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             if (beatmap.HitObjects.Count == 0)
                 return new CatchDifficultyAttributes { Mods = mods };
 
-            var speed = skills.OfType<Speed>().Single();
             var precision = skills.OfType<Precision>().Single();
             var reading = skills.OfType<Reading>().Single();
+            var speed = skills.OfType<Speed>().Single();
 
-            double speedValue = speed.DifficultyValue();
-            double precisionValue = precision.DifficultyValue();
-            double readingValue = reading.DifficultyValue();
+            double precisionRating = Math.Sqrt(precision.DifficultyValue()) * difficulty_multiplier;
+            double readingRating = Math.Sqrt(reading.DifficultyValue()) * difficulty_multiplier;
+            double speedRating = Math.Sqrt(speed.DifficultyValue()) * difficulty_multiplier;
 
-            double total = speedValue + precisionValue + readingValue;
+            double starRating = Math.Pow(Math.Pow(precisionRating, 2) + Math.Pow(readingRating, 2) + Math.Pow(speedRating, 2), 1.0 / 2.0);
 
             CatchDifficultyAttributes attributes = new CatchDifficultyAttributes
             {
-                StarRating = Math.Sqrt(total) * difficulty_multiplier,
+                StarRating = starRating,
+                PrecisionRating = precisionRating,
+                ReadingRating = readingRating,
+                SpeedRating = speedRating,
                 Mods = mods,
                 MaxCombo = beatmap.GetMaxCombo(),
-
-                SpeedDifficulty = speedValue,
-                PrecisionDifficulty = precisionValue,
-                ReadingDifficulty = readingValue,
             };
 
             return attributes;
@@ -66,6 +64,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             CatchHitObject? lastObject = null;
 
             List<DifficultyHitObject> objects = new List<DifficultyHitObject>();
+            List<Flow> flows = new List<Flow>();
 
             // In 2B beatmaps, it is possible that a normal Fruit is placed in the middle of a JuiceStream.
             foreach (var hitObject in CatchBeatmap.GetPalpableObjects(beatmap.HitObjects))
@@ -75,7 +74,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
                     continue;
 
                 if (lastObject != null)
-                    objects.Add(new CatchDifficultyHitObject(hitObject, lastObject, clockRate, halfCatcherWidth, objects, objects.Count));
+                    objects.Add(new CatchDifficultyHitObject(hitObject, lastObject, clockRate, halfCatcherWidth, objects, flows, objects.Count));
 
                 lastObject = hitObject;
             }
@@ -89,9 +88,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 
             return new Skill[]
             {
-                new Speed(mods, halfCatcherWidth, clockRate),
-                new Precision(mods, halfCatcherWidth, clockRate,beatmap.Difficulty.CircleSize),
-                new Reading(mods, halfCatcherWidth, clockRate),
+                new Precision(mods, halfCatcherWidth, clockRate),
+                new Reading(mods),
+                new Speed(mods, halfCatcherWidth),
             };
         }
 
@@ -102,7 +101,5 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             new CatchModHardRock(),
             new CatchModEasy(),
         };
-
-        
     }
 }

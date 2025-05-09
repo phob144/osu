@@ -1,152 +1,144 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System.Collections.Concurrent;
-using System.Reflection.Emit;
-using System.Data;
-using System.ComponentModel.DataAnnotations;
-using Internal;
-using System.IO;
-using System.Text.RegularExpressions;
 using System;
 using System.Linq;
-using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
+using osu.Game.Rulesets.Catch.UI;
+using osu.Game.Rulesets.Difficulty.Preprocessing;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 {
     public static class PrecisionEvaluator
     {
-        public static double EvaluateDifficultyOf(DifficultyHitObject current, float CircleSize, float halfCatcherWidth, double clockRate)
+        public static double EvaluateDifficultyOf(DifficultyHitObject hitObject, float halfCatcherWidth, double clockRate)
         {
-            var obj = (CatchDifficultyHitObject)current;
-            var flow = obj.Flow;
-            var HalfCatcherWidth = halfCatcherWidth;
+            var current = (CatchDifficultyHitObject)hitObject;
+            var prev = (CatchDifficultyHitObject)current.Previous(0);
 
-            double precisionBonus = Math.Pow(clockRate,0.35);
+            float circleSize = 5.0f / 7.0f * (17 - 20 * halfCatcherWidth / (Catcher.BASE_SIZE * Catcher.ALLOWED_CATCH_RANGE));
 
-            // inertia from hyperdash
-            var prev = obj.Previous(0) as CatchDifficultyHitObject;
-            double inertiaCase = 0;
-            if (prev != null){
-                if(Math.Sign(prev.DistanceMoved) != Math.Sign(obj.DistanceMoved))
-                    inertiaCase = 3;
-                    if (prev.LastObject.HyperDash)
-                        inertiaCase *= 1.5 * Math.Min(prev.CatcherSpeed,15);
-            }
+            // Inertia from hyperdash
+            double inertia = 0;
+            if (prev != null && !current.MovementType.IsSameDirection(prev.MovementType))
+                inertia = prev.LastObject.HyperDash ? 4.5 * Math.Min(prev.CatcherDashSpeed, 15) : 3;
 
-            //normalize hyperdash to normal dash
-            double AdjustedDistance = obj.LastObject.HyperDash
-                ? obj.StrainTime * (0.4 + 0.3 * Math.Clamp(2 - 1 / obj.CatcherSpeed,0,2))
-                : Math.Abs(obj.DistanceMoved);
-            AdjustedDistance = AdjustedDistance > halfCatcherWidth*1.5 ? AdjustedDistance - halfCatcherWidth*0.5 : AdjustedDistance; // players tend to use plate size in their movement to catch if the jump is larger than plate size
+            // Normalize hyperdash to normal dash
+            double adjustedDistance = current.LastObject.HyperDash ? current.StrainTime * (0.75 + 0.125 * (2 - 1 / current.CatcherDashSpeed)) : Math.Abs(current.DistanceMoved);
 
-            //base precision from each distance
-            double baseRatio = Math.Max((AdjustedDistance + inertiaCase),1) / Math.Max(obj.StrainTime - 3.0, 25);
-            baseRatio = AdjustedDistance < halfCatcherWidth*1.5 ? AdjustedDistance/(halfCatcherWidth*1.8)*baseRatio : baseRatio * (obj.LastObject.HyperDash? 1 : Math.Pow(1.075, Math.Clamp(100/obj.StrainTime,0,4)-1)); // if the distance is smaller than 0.75x of catcher,
-            double BasePrecisionBonus = baseRatio > 1 ? Math.Pow(baseRatio,3) : Math.Pow(baseRatio,1.75);
-            
+            // Players tend to use plate size in their movement to catch if the jump is larger than plate size
+            if (adjustedDistance > halfCatcherWidth * 1.5)
+                adjustedDistance -= halfCatcherWidth * 0.5;
 
-            //check how sudden the it is in edgedash case
-            double EdgeDashBonus = 1;
-            if (precisionBonus>=1){
-                if(prev!=null){
-                    if(Math.Sign(prev.DistanceMoved) != Math.Sign(obj.DistanceMoved) && prev.LastObject.HyperDash && !obj.LastObject.HyperDash)
-                        EdgeDashBonus *= Math.Min(Math.Max(obj.DistanceMoved/prev.StrainTime,prev.StrainTime/obj.StrainTime),2.25); // antiflow after fast hyperdash or fast antiflow after hyperdash
-                    if(Math.Abs(prev.DistanceMoved)*2 < Math.Abs(obj.DistanceMoved) && !obj.LastObject.HyperDash)
-                        EdgeDashBonus *= 1.5; // edgedash without suggestion
-                }
-            }
+            // Base precision from each distance
+            double basePrecisionBonus = (adjustedDistance + inertia) / Math.Max(current.StrainTime - 3, 25);
 
-            //bonus from hyperwiggle
-            double HyperWiggleBonus = 0;
-            var target = obj;
+            if (adjustedDistance < halfCatcherWidth * 1.5)
+                basePrecisionBonus *= adjustedDistance / (halfCatcherWidth * 1.8);
+            else if (!current.LastObject.HyperDash)
+                basePrecisionBonus *= Math.Pow(1.075, Math.Min(100.0 / current.StrainTime, 4) - 1);
 
-            while (true)
+            basePrecisionBonus = basePrecisionBonus > 1 ? Math.Pow(basePrecisionBonus, 1.8) : Math.Pow(basePrecisionBonus, 2.35);
+
+            basePrecisionBonus *= !current.LastObject.HyperDash && current.StrainTime>=100 ? 100/current.StrainTime : 1; // nerfing salad~platter level to make it traditional
+
+            // Bonus from Catcher speed from mods
+            double clockRateBonus = Math.Pow(clockRate, 0.15);
+
+            // Check how sudden it is in edge dash case
+            double edgeDashBonus = 1;
+
+            if (basePrecisionBonus >= 1 && prev != null)
             {
-                var step = target.Previous(0) as CatchDifficultyHitObject;
-                if (step == null) break;
-                if (!step.LastObject.HyperDash) break;
-                if (Math.Sign(step.DistanceMoved) == Math.Sign(target.DistanceMoved)) break;
+                // Antiflow after fast hyperdash or fast antiflow after hyperdash
+                if (!current.MovementType.IsSameDirection(prev.MovementType) && !current.LastObject.HyperDash && prev.LastObject.HyperDash)
+                    edgeDashBonus *= Math.Min(Math.Max(Math.Abs(current.DistanceMoved) / prev.StrainTime, prev.StrainTime / current.StrainTime), 2.25);
 
-                HyperWiggleBonus+= 1;
-                target = step;
+                // Edge dash without suggestion
+                if (Math.Abs(current.DistanceMoved) > Math.Abs(prev.DistanceMoved) * 2 && !current.LastObject.HyperDash && Math.Sign(current.DistanceMoved) != Math.Sign(prev.DistanceMoved))
+                    edgeDashBonus *= 1.3;
             }
-            HyperWiggleBonus = Math.Pow(Math.Pow(1.01,Math.Pow(Math.Min(obj.CatcherSpeed,10),0.6)),Math.Min(HyperWiggleBonus,6));
 
-            // MidDash bonus with streak multiplier and CS
-            double movementRatio = Math.Abs(obj.DistanceMoved) / Math.Max(obj.StrainTime, 1);
-            bool isMidDash = movementRatio >= 5.0 / 8.0 && movementRatio <= 7.0 / 8.0;
-            double MidDashBonus = 1;
-            if (isMidDash)
+            // Bonus from hyperwiggle
+            double hyperWiggleDirectionChanges = 0;
+
+            for (int i = 0; i < Math.Min(current.Index, 6); i++)
             {
-                double midDashBase = 1.66 - Math.Pow(Math.Abs(movementRatio - 0.75), 0.2);
+                var currObj = (CatchDifficultyHitObject)current.Previous(i - 1);
+                var prevObj = (CatchDifficultyHitObject)current.Previous(i);
 
+                if (!currObj.LastObject.HyperDash || !prevObj.LastObject.HyperDash || currObj.MovementType.IsSameDirection(prevObj.MovementType))
+                    break;
+
+                hyperWiggleDirectionChanges++;
+            }
+
+            double hyperWiggleBonus = hyperWiggleDirectionChanges > 0 ? 1.1 * Math.Pow(1.1, 100/Math.Clamp(current.StrainTime-3,20,100)) : 1;
+            hyperWiggleBonus *= Math.Pow(1.0125, Math.Min(hyperWiggleDirectionChanges,7));
+
+            // Mid-dash bonus with streak multiplier and CS
+            double midDashBonus = 1;
+            double movementSpeed = Math.Abs(current.DistanceMoved) / current.StrainTime;
+
+            if (movementSpeed >= 5.0 / 8.0 && movementSpeed <= 7.0 / 8.0)
+            {
                 int streak = 0;
-                var currentObj = obj;
-                while (streak < 5)
-                {
-                    var previous = currentObj.Previous(0) as CatchDifficultyHitObject;
-                    if (previous == null) break;
 
-                    double previousRatio = Math.Abs(previous.DistanceMoved) / Math.Max(previous.StrainTime, 1);
-                    bool previousMidDash = previousRatio >= 2.0 / 3.0 && previousRatio <= 5.0 / 6.0;
-                    if (!previousMidDash || Math.Sign(previous.DistanceMoved) != Math.Sign(currentObj.DistanceMoved))
+                for (int i = 0; i < Math.Min(current.Index, 5); i++)
+                {
+                    var currObj = (CatchDifficultyHitObject)current.Previous(i - 1);
+                    var prevObj = (CatchDifficultyHitObject)current.Previous(i);
+
+                    double prevMovementSpeed = Math.Abs(prevObj.DistanceMoved) / prevObj.StrainTime;
+                    if (prevMovementSpeed < 5.0 / 8.0 || prevMovementSpeed > 7.0 / 8.0 || !currObj.MovementType.IsSameDirection(prevObj.MovementType))
                         break;
 
                     streak++;
-                    currentObj = previous;
                 }
 
-                double streakMultiplier = Math.Pow(1.1, Math.Max((streak-1),0));
-                MidDashBonus *= Math.Pow(streakMultiplier,midDashBase) * Math.Pow(Math.Max((CircleSize-3.9),1),0.3);
+                double streakMultiplier = Math.Pow(1.075, Math.Max(streak - 1, 0));
+                double midDashBase = 1.66 - Math.Pow(Math.Abs(movementSpeed - 0.75), 0.25);
+                double CSModifier = circleSize >= 4 ? Math.Pow(circleSize - 3, 0.0875) : 0;
+                midDashBonus *= Math.Pow(midDashBase, streakMultiplier) * CSModifier;
             }
+            // Reduce bonus if it's same movement type and not mid-dash
+            else if (prev != null && current.MovementType == prev.MovementType)
+                midDashBonus = 0.2;
 
-            //reduce bonus if it's on same direction and not middash
-            if(prev != null && obj.ModifiedJumpType == prev.ModifiedJumpType && !isMidDash)
-                precisionBonus *= 0.2;
+            // base CS bonus
+            double circleSizeBonus = Math.Pow(Math.Max(circleSize, 0.1), 1.1);
 
-            // CS bonus
-            precisionBonus *= Math.Pow(Math.Max(CircleSize,0.1), 1.1);
+            double precisionDifficulty = 0.33 * basePrecisionBonus * clockRateBonus * edgeDashBonus * hyperWiggleBonus * midDashBonus * circleSizeBonus;
 
+            if (current.Flow.Index < 2 || !current.Flow.IsEnd(current))
+                return precisionDifficulty;
 
-            precisionBonus *= BasePrecisionBonus * EdgeDashBonus * HyperWiggleBonus * MidDashBonus;
+            var currentFlow = current.Flow;
+            var prevFlow = currentFlow.Previous(0);
+            var prevPrevFlow = currentFlow.Previous(1);
 
-            if(!flow.isValid)
-                return Math.Max(precisionBonus/150,0.00001);
-
-            // bonus calc with flow starts below
+            double[] strainTimes = new[] { currentFlow.StrainTime, prevFlow!.StrainTime, prevPrevFlow!.StrainTime };
 
             // Inconsistent rhythm bonus
-            double[] strainTimes = flow.StrainTimeOfFlow;
-            double avg = strainTimes.Average();
-            double std = Math.Sqrt(strainTimes.Select(s => Math.Pow(s - avg, 2)).Average());
-            double cv = avg > 0 ? std / avg : 0;
-
-            int sign(int value) => value == 0 ? 0 : (value > 0 ? 1 : -1);
-
-            int sign0 = sign((int)flow.FlowTypes[0]);
-            int sign1 = sign((int)flow.FlowTypes[1]);
-            int sign2 = sign((int)flow.FlowTypes[2]);
+            double strainTimeAvg = strainTimes.Average();
+            double strainTimeStdDev = Math.Sqrt(strainTimes.Select(s => Math.Pow(s - strainTimeAvg, 2)).Average());
+            double cv = strainTimeStdDev / strainTimeAvg;
 
             double bonusMultiplier;
 
-            if (sign0 != sign1 || sign1 != sign2)
+            if (!prevFlow.MovementType.IsSameDirection(prevPrevFlow.MovementType) && prevPrevFlow.MovementType.IsStandstill())
             {
                 bonusMultiplier = 0.8;
-
-                if (sign0 == sign2 && sign0 != 0)
+                if (currentFlow.MovementType.IsSameDirection(prevPrevFlow.MovementType) && prevPrevFlow.MovementType != MovementType.Standstill)
                     bonusMultiplier = 1.5;
             }
             else
-            {
                 bonusMultiplier = 0.1;
-            }
 
-            double InconsistentRhythmBonus = ( Math.Pow(cv,1.75) * bonusMultiplier / flow.StrainTimeOfFlow[0] ) * 300;
-            precisionBonus += InconsistentRhythmBonus;
+            double inconsistentRhythmBonus = (500 * Math.Pow(cv, 1.75) * bonusMultiplier) / Math.Pow(prevPrevFlow.StrainTime, 1.25);
+            precisionDifficulty += inconsistentRhythmBonus*clockRateBonus;
 
-            return Math.Max(precisionBonus/150, 0.00001);
+            return precisionDifficulty;
         }
     }
 }

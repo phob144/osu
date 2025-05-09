@@ -10,10 +10,13 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Game.Beatmaps;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Overlays;
+using osu.Game.Rulesets.Catch.Difficulty.Evaluators;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
+using osu.Game.Rulesets.Catch.UI;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu.Difficulty.Evaluators;
@@ -31,6 +34,9 @@ namespace PerformanceCalculatorGUI.Screens.ObjectInspection
     {
         [Resolved]
         private Bindable<IReadOnlyList<Mod>> appliedMods { get; set; }
+
+        [Resolved]
+        private BeatmapDifficulty beatmapDifficulty { get; set; }
 
         [Resolved]
         private Track track { get; set; }
@@ -139,7 +145,7 @@ namespace PerformanceCalculatorGUI.Screens.ObjectInspection
 
                 new ObjectInspectorDifficultyValue("Aim Difficulty", AimEvaluator.EvaluateDifficultyOf(hitObject, true)),
                 new ObjectInspectorDifficultyValue("Aim Difficulty (w/o sliders)", AimEvaluator.EvaluateDifficultyOf(hitObject, false)),
-                new ObjectInspectorDifficultyValue("Speed Difficulty", SpeedEvaluator.EvaluateDifficultyOf(hitObject, appliedMods.Value)),
+                new ObjectInspectorDifficultyValue("Speed Difficulty", osu.Game.Rulesets.Osu.Difficulty.Evaluators.SpeedEvaluator.EvaluateDifficultyOf(hitObject, appliedMods.Value)),
                 new ObjectInspectorDifficultyValue("Rhythm Diff", osu.Game.Rulesets.Osu.Difficulty.Evaluators.RhythmEvaluator.EvaluateDifficultyOf(hitObject)),
                 new ObjectInspectorDifficultyValue(hidden ? "FLHD Difficulty" : "Flashlight Diff", FlashlightEvaluator.EvaluateDifficultyOf(hitObject, hidden)),
             });
@@ -191,10 +197,41 @@ namespace PerformanceCalculatorGUI.Screens.ObjectInspection
 
         private void drawCatchValues(CatchDifficultyHitObject hitObject)
         {
+            float halfCatcherWidth = Catcher.CalculateCatchWidth(beatmapDifficulty) * 0.5f;
+
             flowContainer.AddRange(new[]
             {
+                new ObjectInspectorDifficultyValue("Index", hitObject.Index),
+                new ObjectInspectorDifficultyValue("Distance Moved", hitObject.DistanceMoved),
                 new ObjectInspectorDifficultyValue("Strain Time", hitObject.StrainTime),
-                new ObjectInspectorDifficultyValue("Normalized Position", hitObject.NormalizedPosition)
+                new ObjectInspectorDifficultyValue("Movement Type", hitObject.MovementType.ToString()),
+            });
+            flowContainer.AddRange(new Drawable[]
+            {
+                new Box
+                {
+                    Name = "Separator",
+                    Height = 1,
+                    RelativeSizeAxes = Axes.X,
+                    Alpha = 0.5f
+                },
+                new ObjectInspectorDifficultyValue("Flow Index", hitObject.Flow.Index),
+                new ObjectInspectorDifficultyValue("Flow Distance Moved", hitObject.Flow.DistanceMoved),
+                new ObjectInspectorDifficultyValue("Flow Strain Time", hitObject.Flow.StrainTime),
+                new ObjectInspectorDifficultyValue("Flow Movement Type", hitObject.Flow.MovementType.ToString()),
+            });
+            flowContainer.AddRange(new Drawable[]
+            {
+                new Box
+                {
+                    Name = "Separator",
+                    Height = 1,
+                    RelativeSizeAxes = Axes.X,
+                    Alpha = 0.5f
+                },
+                new ObjectInspectorDifficultyValue("Precision Difficulty", PrecisionEvaluator.EvaluateDifficultyOf(hitObject, halfCatcherWidth, track.Rate)),
+                new ObjectInspectorDifficultyValue("Reading Difficulty", osu.Game.Rulesets.Catch.Difficulty.Evaluators.ReadingEvaluator.EvaluateDifficultyOf(hitObject)),
+                new ObjectInspectorDifficultyValue("Speed Difficulty", osu.Game.Rulesets.Catch.Difficulty.Evaluators.SpeedEvaluator.EvaluateDifficultyOf(hitObject, halfCatcherWidth)),
             });
         }
     }

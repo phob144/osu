@@ -13,19 +13,31 @@ namespace PerformanceCalculatorGUI.Screens.ObjectInspection
     {
         private readonly string label;
         private readonly string value;
+        private readonly bool fixedWidth;
 
-        public ObjectInspectorDifficultyValue(string label, double value)
+        public ObjectInspectorDifficultyValue(string label, double value, bool fixedWidth = true)
         {
             this.label = label;
             this.value = value.ToString("N2");
+            this.fixedWidth = fixedWidth;
 
             createLayout();
         }
 
-        public ObjectInspectorDifficultyValue(string label, Vector2 value)
+        public ObjectInspectorDifficultyValue(string label, Vector2 value, bool fixedWidth = true)
         {
             this.label = label;
             this.value = $"({value.X:N2}; {value.Y:N2})";
+            this.fixedWidth = fixedWidth;
+
+            createLayout();
+        }
+
+        public ObjectInspectorDifficultyValue(string label, string value, bool fixedWidth = false)
+        {
+            this.label = label;
+            this.value = value;
+            this.fixedWidth = fixedWidth;
 
             createLayout();
         }
@@ -55,7 +67,7 @@ namespace PerformanceCalculatorGUI.Screens.ObjectInspection
                         Anchor = Anchor.CentreRight,
                         Origin = Anchor.CentreRight,
                         Text = value,
-                        Font = OsuFont.GetFont(weight: FontWeight.Regular, fixedWidth: true)
+                        Font = OsuFont.GetFont(weight: FontWeight.Regular, fixedWidth: fixedWidth)
                     }
                 }
             };
