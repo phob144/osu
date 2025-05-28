@@ -39,9 +39,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
             double strainTimeSum = currentFlow.StrainTime + prevFlow.StrainTime + prevPrevFlow.StrainTime;
             double smallerSum = Math.Min(currentFlow.StrainTime + prevFlow.StrainTime, prevFlow.StrainTime + prevPrevFlow.StrainTime);
-            double minCap = Math.Max(100 * halfCatcherWidth / Math.Max(Math.Abs(current.DistanceMoved), 0.1), 50);
 
-            double adjustedTotalStrain = Math.Max(checkTwoFlow ? smallerSum : strainTimeSum * 2.0 / 3.0, minCap);
+            double adjustedTotalStrain = checkTwoFlow ? smallerSum : strainTimeSum * 2.0 / 3.0;
             double strainTimeBonus = 1 / Math.Pow(adjustedTotalStrain / 150.0, adjustedTotalStrain > 150 ? 2 : 2.5);
 
             double buzzAdjustment = (1 - Math.Clamp(current.BuzzCount - 2, 0, 6) / 6.0) * Math.Clamp(Math.Sign(Math.Abs(current.DistanceMoved)-halfCatcherWidth)+1,0,1);
